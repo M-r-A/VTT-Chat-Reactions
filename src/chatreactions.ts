@@ -1,9 +1,7 @@
 import { TemplatePreloader } from "./module/helper/TemplatePreloader";
-import DirectoryPicker from "./lib/DirectoryPicker";
 import { createPopup, PopupPickerController } from "@picmo/popup-picker";
 import { TwemojiRenderer } from "@picmo/renderer-twemoji";
 import utils from "./utils";
-// import ImagePicker from "./lib/ImagePicker";
 import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
@@ -69,8 +67,9 @@ Hooks.once("init", async () => {
     hint: utils.localize("settings.chatReactionsDirectory.hint"),
     scope: "world",
     config: true,
-    //@ts-ignore
-    type: DirectoryPicker.Directory,
+    type: String,
+    //@ts-ignore -- core renders a folder picker button for this option
+    filePicker: "folder",
     default: "",
     onChange: () => {
       window.location.reload();
@@ -389,8 +388,9 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
 }
 
 async function loadDirectory(directory: string) {
-  const dir = DirectoryPicker.parse(directory);
-  await DirectoryPicker.browse(
+  const dir = utils.parseDirectory(directory);
+  const FilePicker = (foundry as any).applications.apps.FilePicker.implementation;
+  await FilePicker.browse(
     dir.activeSource,
     dir.current,
     {
