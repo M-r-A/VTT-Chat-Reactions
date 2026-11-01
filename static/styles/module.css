@@ -180,7 +180,7 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
   cursor: pointer;
 }
 
-#chatReactionRack {
+.chat-reactions-rack {
   display: flex;
   margin-top: 5px;
 }

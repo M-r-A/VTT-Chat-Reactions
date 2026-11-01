@@ -489,22 +489,10 @@ Hooks.on("renderChatLog", (_app, html, _options) => {
   });
 });
 
-Hooks.on("preRenderChatMessage", async (message, element) => {
-  let messagingElement = element.find(".flavor-text")[0];
-  if (messagingElement === undefined) {
-    messagingElement = element.find(".message-content")[0];
-  }
-  if (message.data.content.includes("<img")) {
-    messagingElement.innerHTML = message.data["_source"].content;
-  }
-});
-
 // Logic for Button Styling and Rendering
-Hooks.on("renderChatMessage", async (message, element: JQuery) => {
-  let messagingElement = element.find(".flavor-text")[0];
-  if (messagingElement === undefined) {
-    messagingElement = element.find(".message-content")[0];
-  }
+Hooks.on("renderChatMessageHTML", (message, element: HTMLElement) => {
+  const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
+  if (!messagingElement) return;
 
   const emojiData = parse(messagingElement.innerText);
   emojiData.forEach((emoji) => {
@@ -559,7 +547,7 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
 
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
-  emojiRack.id = "chatReactionRack";
+  emojiRack.className = "chat-reactions-rack";
   for (const [key, value] of Object.entries(currentEmojiState)) {
     let isvoted = false;
     const button = document.createElement("button");
@@ -604,17 +592,16 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
     const compactButton = document.createElement("a");
     compactButton.className = "compact-reaction-button";
     compactButton.innerHTML = "<i class='fas fa-smile'></i>";
-    element.find(".message-metadata")[0].appendChild(compactButton);
+    element.querySelector(".message-metadata")?.appendChild(compactButton);
 
     compactButton.addEventListener("click", function() {
       togglePicker(compactButton);
       currentMessage = message;
     });
-    if (jQuery.isEmptyObject(currentEmojiState)) return;
+    if (Object.keys(currentEmojiState).length === 0) return;
   }
 
   // Create Picker Button and add it to the Emoji Rack
-  const messageElement = element[0];
   if (Object.entries(currentEmojiState).length < 4) {
     const p = document.createElement("button");
     p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
@@ -626,7 +613,7 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
     });
     emojiRack.appendChild(p);
   }
-  messageElement?.appendChild(emojiRack);
+  element.appendChild(emojiRack);
 });
 
 if (process.env.NODE_ENV === "development") {
