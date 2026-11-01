@@ -431,8 +431,8 @@ function togglePicker(referenceEl: HTMLElement) {
     })
 }
 
-Hooks.on("PopOut:loaded", (app: Application, node: HTMLElement) => {
-  if (app.element.find("#chat-message")) { // Chat window has been popped out into a new window
+Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
+  if (node.querySelector("#chat-message")) { // Chat window has been popped out into a new window
     popoutPicker = createPicker(node);
     // Clone sprite sheet to new window so emojis won't be invisible
     if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
