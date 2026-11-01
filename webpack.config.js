@@ -2,7 +2,6 @@
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const ESLintPlugin = require("eslint-webpack-plugin");
-const globImporter = require("node-sass-glob-importer");
 const path = require("path");
 const glob = require("glob");
 
@@ -79,28 +78,6 @@ module.exports = (env) => {
                     test: /\.(png|svg|jpg|jpeg|gif)$/i,
                     type: 'asset/resource',
                   },
-                {
-                    test: /\.scss$/,
-                    use: [
-                        "style-loader",
-                        {
-                            loader: "css-loader",
-                            options: {
-                                sourceMap: isDevelopment,
-                                url: false,
-                            },
-                        },
-                        {
-                            loader: "sass-loader",
-                            options: {
-                                sourceMap: isDevelopment,
-                                sassOptions: {
-                                    importer: globImporter(),
-                                },
-                            },
-                        },
-                    ],
-                },
             ],
         },
         plugins: [
@@ -111,7 +88,9 @@ module.exports = (env) => {
             new CopyPlugin({
                 patterns: [{
                     from: "static",
-                    noErrorOnMissing: true
+                    noErrorOnMissing: true,
+                    // Ship static files as-is: production minifiers would rewrite module.css
+                    info: { minimized: true },
                 }],
             }),
         ],
