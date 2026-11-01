@@ -2,87 +2,51 @@ import {CustomEmoji, EmojiRecord, IndexedDbStoreFactory } from "picmo";
 
 import {toCodePoints} from "./common";
 
+// A colon followed by at least two word characters, right before the cursor
+const QUERY_PATTERN = /(?:^|\s)(:[\w-]{2,})$/;
+
+/**
+ * Suggests emoji completions in the chat input while a `:query` is typed.
+ * Suggestions are shown in the core autocomplete menu, which also handles Enter/Tab/Arrow/Escape before the chat
+ * input sees them.
+ */
 export default class EmojiPleter {
-  public readonly element: HTMLTextAreaElement;
-  public html: HTMLDivElement | undefined;
-  private _selected: Element | undefined;
-  private _word = '';
-  private _lastSearchTime;
   private readonly _customEmojis: CustomEmoji[];
   private readonly _maxResults;
+  private readonly _autocomplete;
   private _db;
+  private _view;
+  private _word = '';
+  private _lastSearchTime;
 
-  constructor(element: HTMLTextAreaElement, customEmojis: CustomEmoji[], maxResults) {
-    this.element = element;
+  constructor(customEmojis: CustomEmoji[], maxResults) {
     this._customEmojis = customEmojis;
     this._maxResults = maxResults;
     this._db = IndexedDbStoreFactory('en');
     this._db.open();
-    this.activateListeners();
+    const { Autocomplete } = (foundry as any).applications.ux;
+    this._autocomplete = new Autocomplete.implementation({
+      onSelect: (identifier, label, { prefix }) => this.select(identifier, label, prefix)
+    });
   }
 
-  activateListeners() {
-    (this.element.parentNode as Element).addEventListener('keyup', this.onKeyUp, true);
-    // we need to add it to the parent, since base fvtt does use "onCapture =  true" on the text area, which results in listeners being called in order of definition.... so preventing the "Enter" won't be possible that way
-    (this.element.parentNode as Element).addEventListener('keydown', (ev) => this._onKeyDown(ev), true);
-    //this.element.addEventListener('submit', ev => console.log(ev));
-  }
-
-  _onKeyDown(ev) {
-    const code = ev.key;
-    if (code === 'Enter' && this._visible) {
-      const word = this._getWord();
-      if (/^:[\w_-]*$/.exec(word)) {
-        ev.stopPropagation();
-        ev.preventDefault();
-        this.select(this._selected?.querySelector('span')?.innerText);
-      }
+  /**
+   * Inspect the text before the cursor after each change of the chat input.
+   * @param view  The ProseMirror EditorView of the chat input.
+   */
+  onViewUpdate(view) {
+    this._view = view;
+    const { $cursor } = view.state.selection;
+    const preText = $cursor ? $cursor.parent.textBetween(0, $cursor.parentOffset, undefined, "￼") : "";
+    const word = QUERY_PATTERN.exec(preText)?.[1];
+    if (!word) {
+      this._word = '';
       this.close();
-    } else if (code === "Escape") {
-      this.close();
-    } else if (code === 'ArrowDown' || code === 'ArrowUp') {
-      // prevent up/down e.g. for codemirror
-      ev.preventDefault(); ev.stopPropagation();
+      return;
     }
-
-  }
-
-  onKeyUp = (ev) => this._onKeyUp(ev);
-
-  _visible = false;
-
-  _onKeyUp(ev) {
-    if (ev.key === 'Enter') return;
-    if (ev.key === 'ArrowUp') {
-      ev.preventDefault(); ev.stopPropagation();
-      const next = this._selected?.nextElementSibling;
-      if (!next) return;
-
-      this._selected?.classList.remove('selected');
-      next.classList.add('selected');
-      this._selected = next;
-    } else if (ev.key === 'ArrowDown') {
-      ev.preventDefault(); ev.stopPropagation();
-      const next = this._selected?.previousElementSibling;
-      if (!next) return;
-
-      this._selected?.classList.remove('selected');
-      next.classList.add('selected');
-      this._selected = next;
-    } else {
-      const word = this._getWord();
-      if (/^:[\w_-]+$/.exec(word)) {
-        if (word.length > 2 && word !== this._word) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this._word = word;
-          this.update(word);
-        }
-        return;
-      }
-      this._word = word;
-      this.close();
-    }
+    if (word === this._word) return;
+    this._word = word;
+    this.update(word);
   }
 
   _queryMatches(emoji, query: string) {
@@ -123,117 +87,62 @@ export default class EmojiPleter {
     })
   }
 
-  _getWord() {
-    const start = this.element.selectionStart;
-    const preText = this.element.value.substring(0, start);
-    const afterText = this.element.value.substring(start)
-    const wordStart = /[\S_-]*$/.exec(preText) as RegExpExecArray;
-    const wordEnd = /^[\S_-]*/.exec(afterText) as RegExpExecArray;
-    return wordStart[0] + wordEnd[0];
-  }
-
-  update(word) {
-    this.getListTemplate(word).then((list) => {
-      if (!list) return; // search was aborted due to a new search being started
-      if (list === -1) return this.close();
-
-      if (!this._visible) this.show(list);
-      this.html = this.html as HTMLDivElement;
-      this.html.replaceChild(list, this.html.children[0]);
-      this._selected = this.html.querySelector('.emojipleter-emoji') as Element;
-      this._selected.classList.add('selected');
-      this.html.scrollTop = this.html.scrollHeight;
-    });
-  }
-
-  async getListTemplate(word) {
+  async update(word) {
     const searchTime = Date.now();
     this._lastSearchTime = searchTime;
     const list = await this._filter(word, searchTime) as EmojiRecord[];
-    if (this._lastSearchTime !== searchTime) return;
-    if (list.length === 0) return -1;
-    const ul = document.createElement('ul');
-    ul.classList.add('emojipleter-emojilist');
-    for (const e of list) {
-      const li = ul.appendChild(document.createElement('li'));
-      li.classList.add('emojipleter-emoji');
-      if (e.url) { // custom emoji
-        const img = li.appendChild(document.createElement('img'))
-        img.src = e.url;
-        img.classList.add('emoji');
-        img.draggable = false;
-        li.dataset['customEmoji'] = e.emoji
-      } else {
-        li.innerHTML += `<svg class="emoji"><use xlink:href="#${toCodePoints(e.emoji).join('-')}"></use></svg>`
-        li.dataset['emoji'] = e.emoji;
-      }
+    if (this._lastSearchTime !== searchTime || word !== this._word) return; // a newer search was started
+    if (list.length === 0) return this.close();
 
-      li.appendChild(document.createElement('span')).innerText = e.label.replace(/ /g, '-');
+    const target = this._view?.dom as HTMLElement | undefined;
+    if (!target) return;
+    this._autocomplete.activate(target, list.map(e => this._toEntry(e)), { prefix: word });
+    this._autocomplete.select(); // preselect the first entry, as the old popup did
+
+    // The chat input sits at the bottom of the screen, so open the menu upwards
+    const menu = this._autocomplete.element as HTMLElement | null;
+    if (menu) {
+      const { top } = target.getBoundingClientRect();
+      menu.style.top = `${Math.max(0, top - menu.offsetHeight)}px`;
     }
-    return ul;
   }
 
-  get spawnCSS() {
-    const rect = (this.element.parentNode as Element).getBoundingClientRect();
+  _toEntry(e: EmojiRecord) {
+    const label = document.createDocumentFragment();
+    if (e.url) { // custom emoji
+      const img = document.createElement('img');
+      img.src = e.url;
+      img.classList.add('emoji');
+      img.draggable = false;
+      label.appendChild(img);
+    } else {
+      const svg = document.createElement('span');
+      svg.innerHTML = `<svg class="emoji"><use xlink:href="#${toCodePoints(e.emoji).join('-')}"></use></svg>`;
+      label.appendChild(svg.firstElementChild as Element);
+    }
+    label.append(e.label.replace(/ /g, '-'));
     return {
-      width: rect.width + 'px',
-      bottom: (this.element.closest("body") as HTMLBodyElement).getBoundingClientRect().height - rect.top + 'px',
-      left: rect.left + 'px'
-    }
+      identifier: e.url ? `:${e.emoji}:` : e.emoji,
+      label
+    };
   }
 
-  show(list) {
-    if (this.html) return;
-    const div = document.createElement('div');
-    div.id = 'emojipleter';
-    div.appendChild(list);
-    (this.element.closest("body") as HTMLBodyElement).appendChild(div);
-
-    div.scrollTop = div.scrollHeight;
-    this.html = div;
-    const css = this.spawnCSS;
-    for (const key in css) {
-      this.html.style[key] = css[key];
-    }
-
-    div.addEventListener('click', ev => {
-      const target = (ev.target as Element | undefined)?.closest('.emojipleter-emoji');
-      if (!target) return;
-      this.select((target.querySelector('span') as HTMLSpanElement).innerText);
-      this.close();
-    });
-    div.addEventListener('mousemove', ev => {
-      const target = (ev.target as Element | undefined)?.closest('.emojipleter-emoji');
-      if (!target || target === this._selected) return;
-      if (this._selected)
-        this._selected.classList.remove('selected');
-      this._selected = target;
-      target.classList.add('selected');
-    })
-    this._visible = true;
+  close() {
+    if ((ui as any).autocomplete === this._autocomplete) this._autocomplete.dismiss();
   }
 
-  close()  {
-    if (!this._visible) return;
+  select(identifier: string, label: string, prefix: string) {
+    const view = this._view;
+    if (!view || !Hooks.call('emojuleSelectEmoji', label, view.dom)) return;
 
-    (this.html as Element).remove();
-    this.html = undefined;
-    this._visible = false;
-  }
-
-  select(str) {
-    if (!Hooks.call('emojuleSelectEmoji', str, this.element)) return;
-
-    const orig = this.element.value;
-    const start = this.element.selectionStart;
-    const preText = this.element.value.substring(0, start);
-    const afterText = this.element.value.substring(start)
-    const wordStart = (/[\S_-]*$/.exec(preText) as RegExpExecArray)[0];
-    const wordEnd = (/^[\S_-]*/.exec(afterText) as RegExpExecArray)[0];
-
-    this.element.value = orig.substring(0, start - wordStart.length)
-                       + ((this._selected as HTMLElement).dataset['emoji'] || `:${(this._selected as HTMLElement).dataset['customEmoji']}:`)
-                       + orig.substring(start + wordEnd.length);
-    this.element.focus();
+    // Replace the typed `:query` before the cursor with the chosen emoji
+    const { state } = view;
+    const { $cursor } = state.selection;
+    if (!$cursor || !prefix) return;
+    const preText = $cursor.parent.textBetween(0, $cursor.parentOffset, undefined, "￼");
+    if (!preText.endsWith(prefix)) return;
+    view.dispatch(state.tr.insertText(identifier, $cursor.pos - prefix.length, $cursor.pos));
+    view.focus();
+    this._word = '';
   }
 }

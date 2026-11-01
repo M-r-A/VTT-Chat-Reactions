@@ -7,44 +7,12 @@
   left: 0;
 }
 
-#emojipleter {
-  position: absolute;
-  z-index: 200;
-  background: url(../../../ui/denim075.png) repeat;
-  padding: 0;
-  border-radius: 0.5em;
-  overflow-x: hidden;
-  overflow-y: scroll;
-  max-height: 500px;
-}
-
-#emojipleter .emojipleter-emojilist {
-  list-style-type: none;
-  padding: 0;
-  color: #ccc;
-  display: flex;
-  flex-flow: column-reverse nowrap;
-}
-
-#emojipleter .emojipleter-emoji {
-  padding: 0.5em 0.25em;
-  border-radius: 0.5em;
-  display: flex;
-  align-items: center;
-}
-
-#emojipleter span {
-  white-space: nowrap;
-}
-
-#emojipleter .emojipleter-emoji.selected{
-  background: #6594d6;
-}
-
-#emojipleter .emoji {
+/* Emoji completions in the core autocomplete menu */
+#autocomplete li .emoji {
   margin-right: 0.5em;
   width: 1.5em;
   height: 1.5em;
+  vertical-align: middle;
 }
 
 .emoji-button {
@@ -65,13 +33,8 @@
   position: absolute;
 }
 
-.relative {
-  position:relative;
-}
-
-#chat-controls:not(:has(.emoji-picker-button--compact)) ~ #chat-form #chat-message{
-  padding-left: 2.75em;
-  padding-top: 0.75em;
+#chat-controls .chat-reactions-picker .emoji-image {
+  height: 1.25em;
 }
 
 #chat-controls {
@@ -90,29 +53,10 @@
   justify-content: flex-end;
 }
 
-/* Make compact emoji button compatible with df-chat-enhance replaced roll buttons */
-#chat-controls:has(.emoji-picker-button--compact) #dfcp-rt-buttons :is(.chat-archive, .export-log, .chat-flush) {
-  display: none;
-}
-
 /* Make compact emoji button clickable when in DF Chat Enhancements merged message */
 .message-metadata {
   z-index: 1;
   max-height: 0; /* Make player view consistent with GM view */
-}
-
-.emojiPickerButton {
-  height: 1.75rem;
-  width: 1.75rem;
-  line-height: 1.5;
-  top:8px;
-  left:5px;
-  font-size: 10px;
-  font-weight: bold;
-  border-radius: 5px;
-  cursor: pointer;
-  margin-bottom: 1.75rem;
-  position:absolute
 }
 
 img.emoji, svg.emoji {
