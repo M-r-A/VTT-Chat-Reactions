@@ -16,5 +16,8 @@ node_modules/
 bin/
 obj/
 
+# Build output, produced by `npm run build` and in CI
+/dist/
+
 # If you add foundry.js for autocomplete
 foundry.js
