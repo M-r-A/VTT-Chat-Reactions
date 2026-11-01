@@ -12,6 +12,20 @@ An image is worth a thousand words, therefore a animated parrot gif must be wort
  - Adds Twemoji and Custom emojis to chat
  - Suggests emoji completions when typing a colon `:` in chat
 
+# Installing this fork
+This is a maintained fork of [YourFavouriteOreo/VTT-Chat-Reactions](https://github.com/YourFavouriteOreo/VTT-Chat-Reactions). It keeps the module id `chatreactions`, so existing reactions and settings carry over.
+
+Install it in Foundry with this manifest URL:
+```
+https://github.com/M-r-A/VTT-Chat-Reactions/releases/latest/download/module.json
+```
+
+# Building
+- `npm ci --ignore-scripts`
+- `npm run build:production` (or `npm run build` for a development build with source maps)
+
+The module is written to `dist/`, which is not committed: releases are built by CI.
+
 # Development Instructions From the Template:
 About Bundler:  
 This project uses webpack to bundle your files. What this means is that every script file in src/ will get 'bundled' into one output .js file in dist/.
