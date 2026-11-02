@@ -5,7 +5,7 @@ import utils from "./utils";
 import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
-import EmojiPleter from "./emojipleter";
+import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
 
 declare global {
     interface LenientGlobalVariableTypes {
@@ -224,7 +224,7 @@ Hooks.once("init", async () => {
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
 
   if (game.settings.get("chatreactions", "emojipleter"))
-    emojiPleter = new EmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
+    emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
 
   //   --category-button-color
 
@@ -326,12 +326,18 @@ function createPicker(rootElement: HTMLElement = document.body) {
   return newPicker;
 }
 
-// Insert text at the cursor of the chat input
+// Insert text at the cursor of the chat input: a ProseMirror editor in v14, a textarea before
 function insertIntoChatInput(text: string) {
   const view = chatInputView;
-  if (!view) return;
-  view.dispatch(view.state.tr.insertText(text));
-  view.focus();
+  if (view) {
+    view.dispatch(view.state.tr.insertText(text));
+    view.focus();
+    return;
+  }
+  const textarea = document.querySelector<HTMLTextAreaElement>("textarea#chat-message");
+  if (!textarea) return;
+  textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end");
+  textarea.focus();
 }
 
 async function socketExecute(emoji, message) {
@@ -389,8 +395,9 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
 
 async function loadDirectory(directory: string) {
   const dir = utils.parseDirectory(directory);
-  const FilePicker = (foundry as any).applications.apps.FilePicker.implementation;
-  await FilePicker.browse(
+  // v13+ FilePicker is an ApplicationV2 in foundry.applications.apps; v12 has the global one
+  const Picker = (foundry as any).applications?.apps?.FilePicker?.implementation ?? FilePicker;
+  await Picker.browse(
     dir.activeSource,
     dir.current,
     {
@@ -448,7 +455,9 @@ function buildChatInputPlugin() {
     view: (view) => {
       chatInputView = view;
       return {
-        update: (updated) => emojiPleter?.onViewUpdate(updated),
+        update: (updated) => {
+          if (emojiPleter instanceof AutocompleteEmojiPleter) emojiPleter.onViewUpdate(updated);
+        },
         destroy: () => {
           if (chatInputView === view) chatInputView = undefined;
           emojiPleter?.close();
@@ -477,7 +486,32 @@ Hooks.on("renderChatInput", (_app, elements: Record<string, HTMLElement>) => {
   }
 
   const controls = elements["#chat-controls"];
-  if (!controls || controls.querySelector(".chat-reactions-picker")) return;
+  if (controls) addEmojiButton(controls);
+});
+
+// The core major version (12, 13, 14…); the bundled v9 types do not know release.generation
+function coreGeneration(): number {
+  return (game.release as any).generation;
+}
+
+// v12 has no renderChatInput: the chat log renders its own textarea and controls
+Hooks.on("renderChatLog", (_app, html) => {
+  if (coreGeneration() >= 13) return;
+  const controls = (html[0] ?? html).querySelector("#chat-controls") as HTMLElement | null;
+  if (!controls) return;
+  // As in v2.3.5, the button sits with the GM's export/clear buttons, which players do not have
+  let buttons = controls.querySelector<HTMLElement>(".control-buttons");
+  if (!buttons) {
+    buttons = document.createElement("div");
+    buttons.className = "control-buttons";
+    controls.append(buttons);
+  }
+  addEmojiButton(buttons);
+});
+
+// The emoji button next to the chat input
+function addEmojiButton(container: HTMLElement) {
+  if (container.querySelector(".chat-reactions-picker")) return;
   const button = document.createElement("button");
   button.type = "button";
   button.classList.add("chat-reactions-picker", "ui-control", "icon");
@@ -486,17 +520,23 @@ Hooks.on("renderChatInput", (_app, elements: Record<string, HTMLElement>) => {
   } else {
     button.innerHTML = `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
   }
-  button.dataset.tooltipText = "Add emoji";
+  button.dataset.tooltip = "Add emoji"; // data-tooltip works from v12 on (data-tooltip-text only from v13)
   button.setAttribute("aria-label", "Add emoji");
   button.addEventListener("click", function () {
     togglePicker(button);
     currentMessage = null;
   });
-  controls.append(button);
+  container.append(button);
+}
+
+// v13+ passes the message as an HTMLElement to renderChatMessageHTML; v12 only has renderChatMessage, with jQuery
+Hooks.once("init", () => {
+  if (coreGeneration() >= 13) Hooks.on("renderChatMessageHTML", renderMessage);
+  else Hooks.on("renderChatMessage", (message, html) => renderMessage(message, html[0] ?? html));
 });
 
 // Logic for Button Styling and Rendering
-Hooks.on("renderChatMessageHTML", (message, element: HTMLElement) => {
+function renderMessage(message, element: HTMLElement) {
   const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
   if (!messagingElement) return;
 
@@ -621,7 +661,7 @@ Hooks.on("renderChatMessageHTML", (message, element: HTMLElement) => {
     emojiRack.appendChild(p);
   }
   element.appendChild(emojiRack);
-});
+}
 
 if (process.env.NODE_ENV === "development") {
   if (module.hot) {

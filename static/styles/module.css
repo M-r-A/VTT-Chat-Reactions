@@ -7,12 +7,62 @@
   left: 0;
 }
 
-/* Emoji completions in the core autocomplete menu */
+/* Emoji completions in the core autocomplete menu (v14) */
 #autocomplete li .emoji {
   margin-right: 0.5em;
   width: 1.5em;
   height: 1.5em;
   vertical-align: middle;
+}
+
+/* Emoji completions above the textarea chat input (v12-v13) */
+#emojipleter {
+  position: fixed;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0;
+  border-radius: 0.5em;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 500px;
+}
+#emojipleter .emojipleter-emojilist {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  color: #ccc;
+  display: flex;
+  flex-flow: column-reverse nowrap;
+}
+#emojipleter .emojipleter-emoji {
+  padding: 0.5em 0.25em;
+  border-radius: 0.5em;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#emojipleter .emojipleter-emoji.selected {
+  background: #6594d6;
+}
+#emojipleter .emoji {
+  margin-right: 0.5em;
+  width: 1.5em;
+  height: 1.5em;
+}
+
+/* v12 has no .ui-control style: make the emoji button look like the other chat control icons */
+#chat-controls .control-buttons .chat-reactions-picker {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  line-height: inherit;
+  color: inherit;
 }
 
 .emoji-button {
@@ -127,6 +177,8 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
 .chat-reactions-rack {
   display: flex;
   margin-top: 5px;
+  /* dnd5e 4.x-5.x paint the card texture in an absolute li.chat-message::before; above it, like the header and content */
+  position: relative;
 }
 
 .trigger {
