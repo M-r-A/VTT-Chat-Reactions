@@ -575,15 +575,16 @@ Hooks.on("renderChatMessageHTML", (message, element: HTMLElement) => {
       ButtonContent.innerHTML += `<svg class="emoji-image"><use xlink:href="#${toCodePoints(key).join('-')}"></use></svg>`;
     }
     ButtonContent.className = "emoji-button-content";
-    ButtonContent.title = voters.map((userId) => game.users?.get(userId)?.name).join(", ");
     ButtonContent.appendChild(EmojiReactions);
     button.appendChild(ButtonContent);
+    // Core v13+ styles disable pointer events on the children of buttons, so the button itself takes the hover and click
+    button.title = voters.map((userId) => game.users?.get(userId)?.name).join(", ");
     if (isvoted) {
       button.className = "emoji-button emoji-active ";
     } else {
       button.className = "emoji-button reaction";
     }
-    ButtonContent.addEventListener("click", function () {
+    button.addEventListener("click", function () {
       //@ts-ignore
       socketExecute(
         key,
