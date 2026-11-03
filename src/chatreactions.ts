@@ -6,7 +6,9 @@ import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
 import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
-
+import {
+  attachReactionCard, formatCount, formatReactionTime, hideReactionCard, readReactedAt, sortReactions
+} from "./reaction-card";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -22,6 +24,7 @@ let chatInputView; // ProseMirror EditorView of the chat input
 let emojiPleter: EmojiPleter | undefined;
 const emojiDirectories: any = [];
 const customEmojis: any = [];
+let fileBrowserDenied = false; // a custom emoji folder could not be read: the user may not browse files
 let categories = ['recents', 'custom', 'smileys-emotion', 'people-body', 'animals-nature', 'food-drink', 'activities', 'travel-places', 'objects', 'symbols', 'flags'];
 
 Hooks.once("socketlib.ready", () => {
@@ -100,6 +103,9 @@ Hooks.once("init", async () => {
   console.log(
     "===========================♥ Chat  Reactions ♥=========================="
   );
+
+  // Helpers other modules (and the tests) can use: game.modules.get("chatreactions").api
+  (game.modules.get("chatreactions") as any).api = { formatCount, formatReactionTime, sortReactions };
 
   // Go through the active modules to find Emoji Packs to add. Packages are identified by id (name before v10).
   // Packs declare their folder in the emojiPack flag; earlier versions read emojiPacker, which still works.
@@ -271,6 +277,12 @@ Hooks.once("ready", () => {
   if (game.settings.get("chatreactions", "chat-reactions-directory") === "") {
     console.warn(utils.localize("warnings.noDirectory"));
   }
+  // Users who cannot browse files cannot load the custom emoji folder or emoji packs: one console warning for all
+  // of them, instead of a notification per folder on every load
+  if (fileBrowserDenied) {
+    console.warn(game.i18n.format("chatreactions.warnings.noFileBrowser",
+      { permission: game.i18n.localize("PERMISSION.FilesBrowse") }));
+  }
 });
 
 function onEmojiInput(selection) {
@@ -370,6 +382,9 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string)
     );
   }
 
+  // When each user reacted, kept beside the reactions (GM clock)
+  const reactedAt = readReactedAt(sentMessage);
+
   // Reaction Logic
   if (currentEmojiState[emoji]) {
     if (currentEmojiState[emoji].includes(user)) {
@@ -381,13 +396,23 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string)
       if (currentEmojiState[emoji].length === 0) {
         delete currentEmojiState[emoji];
       }
+      delete reactedAt[emoji]?.[user];
+      if (reactedAt[emoji] && Object.keys(reactedAt[emoji]).length === 0) delete reactedAt[emoji];
     } else {
       currentEmojiState[emoji].push(user);
+      (reactedAt[emoji] ??= {})[user] = Date.now();
     }
   } else {
     currentEmojiState[emoji] = [user];
+    (reactedAt[emoji] ??= {})[user] = Date.now();
   }
-  await sentMessage?.setFlag("world", "emoji", JSON.stringify(currentEmojiState));
+  // One update for both flags, so clients never render reactions without their times
+  await sentMessage?.update({
+    flags: {
+      world: { emoji: JSON.stringify(currentEmojiState) },
+      chatreactions: { reactedAt: JSON.stringify(reactedAt) },
+    },
+  } as any);
 }
 
 async function loadDirectory(directory: string) {
@@ -404,9 +429,7 @@ async function loadDirectory(directory: string) {
     // Load all the custom emojis from emoji packs
     addToCustomEmojiList(fileList, customEmojis);
   }).catch(() => {
-    Hooks.once("ready", () => {
-      ui.notifications?.warn("Chat Reactions: The GM must give you permission to use the file browser for you to use emoji packs.");
-    });
+    fileBrowserDenied = true; // reported once, in the console, when ready
   });
 }
 
@@ -534,6 +557,8 @@ Hooks.once("init", () => {
 
 // Logic for Button Styling and Rendering
 function renderMessage(message, element: HTMLElement) {
+  hideReactionCard(message.id); // its pill is being replaced
+
   const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
   if (!messagingElement) return;
 
@@ -591,9 +616,10 @@ function renderMessage(message, element: HTMLElement) {
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
   emojiRack.className = "chat-reactions-rack";
-  for (const [key, value] of Object.entries(currentEmojiState)) {
+  for (const [key, value] of sortReactions(currentEmojiState, readReactedAt(message))) {
     let isvoted = false;
     const button = document.createElement("button");
+    button.dataset.emoji = key;
     const voters = value as Array<string>;
     voters.forEach((voter) => {
       if (game.user?.id == voter) {
@@ -602,7 +628,7 @@ function renderMessage(message, element: HTMLElement) {
     });
     const ButtonContent = document.createElement("div");
     const EmojiReactions = document.createElement("p");
-    EmojiReactions.textContent = `${voters.length}`;
+    EmojiReactions.textContent = formatCount(voters.length);
     if (key.includes("/")) { // Custom emoji
       const EmojiImage = document.createElement("img");
       EmojiImage.className = "emoji-image";
@@ -614,13 +640,15 @@ function renderMessage(message, element: HTMLElement) {
     ButtonContent.className = "emoji-button-content";
     ButtonContent.appendChild(EmojiReactions);
     button.appendChild(ButtonContent);
-    // Core v13+ styles disable pointer events on the children of buttons, so the button itself takes the hover and click
-    button.title = voters.map((userId) => game.users?.get(userId)?.name).join(", ");
+    // Core v13+ styles disable pointer events on the children of buttons, so the button itself takes the hover and click.
+    // Who reacted and when shows in the reaction card; screen readers get the names.
+    button.setAttribute("aria-label", voters.map((userId) => game.users?.get(userId)?.name ?? "?").join(", "));
     if (isvoted) {
       button.className = "emoji-button emoji-active ";
     } else {
       button.className = "emoji-button reaction";
     }
+    attachReactionCard(button, message, key, voters);
     button.addEventListener("click", function () {
       //@ts-ignore
       socketExecute(

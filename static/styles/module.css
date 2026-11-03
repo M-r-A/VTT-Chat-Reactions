@@ -145,15 +145,29 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
   font-family: 'Signika', sans-serif;
 }
 
+/* Emoji buttons look the same on every core: v13+ gives buttons a 64px min-height, which stretched the hover
+   highlight, a 0.5s transition, which made the glow trail the cursor, and drops the red hover glow v12 gives every
+   button */
+.picmo__picker .picmo__emojiButton {
+  min-height: 0;
+  line-height: 28px;
+  transition: none;
+}
+
+.picmo__picker .picmo__emojiButton:hover {
+  box-shadow: 0 0 5px rgb(255, 0, 0);
+}
+
 .reaction {
   background: rgba(0, 0, 0, 0.6);
 }
 
+/* The viewer's own reaction is filled with the accent color, as in Telegram */
 .emoji-active {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(150, 40, 30, 0.9);
   font-weight: bold;
-  border: 1px solid rgba(255, 0, 0, 0.8);
-  box-shadow: 0px 0px 4px rgba(255, 0, 0, 0.75);
+  border: 1px solid rgba(255, 120, 100, 0.9);
+  box-shadow: none;
 }
 
 .emoji {
@@ -184,6 +198,8 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
 
 .chat-reactions-rack {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 5px;
   margin-top: 5px;
   /* dnd5e 4.x-5.x paint the card texture in an absolute li.chat-message::before; above it, like the header and content */
   position: relative;
@@ -195,4 +211,108 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
   width: 30px;
   border-radius: 100%;
   height: 30px;
+}
+
+/* Who reacted, and when: a card above the reaction pill (see reaction-card.ts). It takes the look of the core tooltip
+   in the current theme through the --chat-reactions-card-* properties; the values here are the fallbacks. */
+.chat-reactions-card {
+  position: fixed;
+  z-index: 1000;
+  width: 16rem;
+  background: var(--chat-reactions-card-background, rgba(32, 32, 34, 0.97));
+  color: var(--chat-reactions-card-color, #f0f0f0);
+  border: var(--chat-reactions-card-border, none);
+  border-radius: var(--chat-reactions-card-radius, 12px);
+  box-shadow: var(--chat-reactions-card-shadow, 0 4px 16px rgba(0, 0, 0, 0.5));
+  font-family: var(--chat-reactions-card-font, var(--font-primary, "Signika"), sans-serif);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--chat-reactions-card-fade, 0.25s) ease;
+}
+
+.chat-reactions-card.active {
+  opacity: 1;
+}
+
+.chat-reactions-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 0;
+  /* Five and a half rows below the top padding: the cut sixth row hints that the list scrolls, as in Telegram */
+  box-sizing: border-box;
+  max-height: calc(5.5 * 3rem + 6px);
+  overflow-y: auto;
+}
+
+/* Room below the last row, inside the scrolled list */
+.chat-reactions-card-row:last-child {
+  margin-bottom: 6px;
+}
+
+.chat-reactions-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  height: 3rem;
+  box-sizing: border-box;
+}
+
+.chat-reactions-card-avatar {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  overflow: hidden;
+  /* behind transparent avatars, such as Foundry's default one */
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.chat-reactions-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+}
+
+.chat-reactions-card-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-reactions-card-name {
+  display: block;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Names that do not fit fade out instead of wrapping */
+.chat-reactions-card-name.truncated {
+  -webkit-mask-image: linear-gradient(to right, black 80%, transparent);
+  mask-image: linear-gradient(to right, black 80%, transparent);
+}
+
+.chat-reactions-card-time {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+  white-space: nowrap;
+}
+
+.chat-reactions-card-time .emoji-image {
+  height: 0.9rem;
+  margin: 0;
+}
+
+.chat-reactions-card-hint {
+  padding: 0.55rem 0.9rem;
+  border-top: 6px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 0.85rem;
+  color: color-mix(in srgb, currentColor 85%, transparent);
 }
