@@ -65,11 +65,14 @@
   color: inherit;
 }
 
+/* The pill fits its content, so the count sits at the same distance from the emoji whatever its digits */
 .emoji-button {
   color: white;
   border-radius: 10px;
   height: 2rem;
-  width: 3.25rem;
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0 0.6em;
   line-height: 1;
   font-size: 0.85rem;
   margin-right: 5px;
@@ -159,8 +162,12 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
 
 .emoji-button-content {
   display: flex;
-  padding: 0px 2px;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.emoji-button-content p {
+  margin: 0;
 }
 
 .emoji-image {
