@@ -2,8 +2,6 @@
 ![Animated Parrot](.github/anim_parrot.gif)     
 An image is worth a thousand words, therefore a animated parrot gif must be worth a million . This module is there so your players can add emojis to their text or react to chat messages / rolls or just anything with more than just words.
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/yourfavouriteoreo)
-
 # Current Features
  - Adds Emoji Picker to Chat items / rolls
  - Loads Custom Emojis from a dedicated emoji folder and adds them to the picker
@@ -60,7 +58,11 @@ The picker requires an Object with the following information for custom emoji
 ## On SocketLib.ready
 This event is a custom event for the [Stäbchenfisch's Socketlib module](https://github.com/manuelVo/foundryvtt-socketlib) which is used to handle functions remotely as a GM. It is explained [here](#On-Emoji) if you want to be naughty and skip ahead.
 ## On Init
-As per the BadIdeasBureau's suggestion, the module looks through all the other modules for an **emojiPack** flag. This flag should be of type **String** that points to the directory that contains emojis in the modules folder.
+As per the BadIdeasBureau's suggestion, the module looks through all the other active modules for an **emojiPack** flag. This flag should be of type **String** that points to the directory that contains emojis in the modules folder, starting with `/`. For example, a pack module with emojis in `modules/my-emoji-pack/emojis` has this in its `module.json`:
+
+```json
+"flags": { "emojiPack": "/emojis" }
+```
 
 The module then proceeds to check these folders for all their emoji files and adds them to the picker with the relevant [emoji data](#Handling-Custom-Emojis)
 

@@ -4,6 +4,9 @@
 
   "chatreactions": {
     "title": "Chat Reactions",
+    "warnings": {
+      "noDirectory": "Chat Reactions | Custom emojis are off because no emoji folder is set. A GM can choose a folder with emoji images in Configure Settings → Chat Reactions → Custom Emojis Directory."
+    },
     "settings": {
       "emojipleter": {
         "name": "Enable Emojipleter",

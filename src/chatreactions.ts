@@ -32,13 +32,68 @@ Hooks.once("socketlib.ready", () => {
   socket.register("handleReaction", handleReaction);
 });
 
-function isHexColor(hex) {
-  const x =
-    typeof hex === "string" && hex.length === 6 && !isNaN(Number("0x" + hex));
-  if (x) {
-    picker = createPicker();
+// Default picker colors. They carry the "#": v13+ cores JSON.parse string settings, so a bare "782e22" would come
+// back as the number "7.82e+24".
+const PICKER_COLORS = {
+  "picker-background": "#d2d2c6",
+  "picker-font-color": "#000000",
+  "category-active-icon-color": "#782e22",
+};
+
+type PickerColor = keyof typeof PICKER_COLORS;
+
+// A stored or entered color as "#rrggbb", or undefined when it is not a hex color (such as "7.82e+24").
+// Earlier versions stored the colors without "#".
+function normalizeColor(value): string | undefined {
+  const hex = String(value?.css ?? value ?? "").replace(/^#/, "");
+  return /^[0-9a-f]{6}$/i.test(hex) ? `#${hex.toLowerCase()}` : undefined;
+}
+
+// A picker color as 6 hex digits without the "#", falling back to the default. The color field gives a Color on
+// v13+ and the stored string on v12.
+function pickerColor(key: PickerColor): string {
+  let value;
+  try {
+    value = game.settings.get("chatreactions", key);
+  } catch {
+    value = undefined;
   }
-  return x;
+  return (normalizeColor(value) ?? PICKER_COLORS[key]).slice(1);
+}
+
+// Picker colors use the core color field, which shows a color picker in the settings
+function registerPickerColor(key: PickerColor, name: string, hint: string) {
+  game.settings.register("chatreactions", key, {
+    name,
+    hint,
+    scope: "world",
+    config: true,
+    type: new (foundry as any).data.fields.ColorField({ nullable: false, initial: PICKER_COLORS[key] }),
+    default: PICKER_COLORS[key],
+    onChange: (_value, options) => {
+      if (!options?.chatReactionsMigration) window.location.reload();
+    },
+  } as any);
+}
+
+// The color field only accepts "#rrggbb". Values stored by earlier versions ("d2d2c6", or "7.82e+24" after the core
+// JSON-parsed "782e22") are rewritten once by the active GM, without reloading anyone.
+async function migratePickerColors() {
+  if (!game.user?.isGM || (game.users as any)?.activeGM !== game.user) return;
+  const stored = (game.settings as any).storage.get("world");
+  for (const key of Object.keys(PICKER_COLORS) as PickerColor[]) {
+    const setting = stored.find((s) => s.key === `chatreactions.${key}`);
+    if (!setting) continue;
+    let raw = setting._source.value;
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      // stored as plain text
+    }
+    const value = normalizeColor(raw) ?? PICKER_COLORS[key];
+    // The options reach onChange, which then skips the reload; the bundled v9 types do not know this argument
+    if (value !== raw) await (game.settings as any).set("chatreactions", key, value, { chatReactionsMigration: true });
+  }
 }
 
 Hooks.once("init", async () => {
@@ -46,15 +101,13 @@ Hooks.once("init", async () => {
     "===========================♥ Chat  Reactions ♥=========================="
   );
 
-  const modules = await game.modules;
-  modules.forEach((module) => {
-    // Go through all modules to find Emoji Packs to add
-    if (module["flags"]?.["emojiPacker"]) {
-      console.log(`\nChat Reactions found ${module["title"]}\n`);
-      emojiDirectories.push(
-        `modules/${module["name"]}${module["flags"]?.["emojiPacker"]}`
-      );
-    }
+  // Go through the active modules to find Emoji Packs to add. Packages are identified by id (name before v10).
+  // Packs declare their folder in the emojiPack flag; earlier versions read emojiPacker, which still works.
+  game.modules.forEach((module: any) => {
+    const packDirectory = module.flags?.emojiPack ?? module.flags?.emojiPacker;
+    if (!module.active || !packDirectory) return;
+    console.log(`\nChat Reactions found ${module.title}\n`);
+    emojiDirectories.push(`modules/${module.id}${packDirectory}`);
   });
 
   for (const directory of emojiDirectories) {
@@ -124,64 +177,12 @@ Hooks.once("init", async () => {
     }
   });
 
-  game.settings.register("chatreactions", "picker-background", {
-    name: "Background color for the picker ",
-    hint: "Background color in hex that will appear behind the emoji picker",
-    scope: "world",
-    config: true,
-    type: String,
-    default: "d2d2c6",
-    onChange: (value) => {
-      if(isHexColor(value)){
-        window.location.reload()
-      }
-      else {
-        ui.notifications?.warn(
-          "The value provided is NOT a hex value"
-        );
-      }
-    },
-  });
-
-  game.settings.register("chatreactions", "picker-font-color", {
-    name: "Font color for the picker",
-    hint:
-      "Hex color used in the text for the emoji picker. This color will be contrasted for headers",
-    scope: "world",
-    config: true,
-    type: String,
-    default: "000000",
-    onChange: (value) => {
-      if(isHexColor(value)){
-        window.location.reload()
-      }
-      else {
-        ui.notifications?.warn(
-          "The value provided is NOT a hex value"
-        );
-      }
-    },
-  });
-
-  game.settings.register("chatreactions", "category-active-icon-color", {
-    name: "Font color for the active icon/category",
-    hint:
-      "Font color for the active icon/category. This color will be contrasted for inactive",
-    scope: "world",
-    config: true,
-    type: String,
-    default: "782e22",
-    onChange: (value) => {
-      if(isHexColor(value)){
-        window.location.reload()
-      }
-      else {
-        ui.notifications?.warn(
-          "The value provided is NOT a hex value"
-        );
-      }
-    },
-  });
+  registerPickerColor("picker-background", "Background color for the picker",
+    "Background color that will appear behind the emoji picker");
+  registerPickerColor("picker-font-color", "Font color for the picker",
+    "Color used in the text for the emoji picker. This color will be contrasted for headers");
+  registerPickerColor("category-active-icon-color", "Font color for the active icon/category",
+    "Color for the active icon/category. This color will be contrasted for inactive");
 
   game.settings.register("chatreactions", "max-recents", {
     name: "Max recent emojis",
@@ -243,53 +244,33 @@ Hooks.once("init", async () => {
   //   },
   // });
 
-  // Warn User/GM if the directory isnt defined
-  if (game.settings.get("chatreactions", "chat-reactions-directory") === "") {
-    ui.notifications?.warn(
-      "The Emoji Reactions module supports custom emojis, Please setup a custom directory to add them!"
-    );
-  } else {
-    await loadDirectory(game.settings.get("chatreactions", "chat-reactions-directory") as string);
-  }
+  const directory = game.settings.get("chatreactions", "chat-reactions-directory") as string;
+  if (directory !== "") await loadDirectory(directory);
 
   picker = createPicker();
 
   const pickerCssRules = {
-    "--background-color": `#${game.settings.get(
-      "chatreactions",
-      "picker-background"
-    )}`,
-    "--secondary-background-color": `#${game.settings.get(
-        "chatreactions",
-        "picker-background"
-    )}`,
-    "--category-name-background-color": `#${game.settings.get(
-        "chatreactions",
-        "picker-background"
-    )}`,
-    "--category-name-text-color": `#${game.settings.get(
-        "chatreactions",
-        "picker-font-color"
-    )}75`,
-    "--text-color": `#${game.settings.get(
-      "chatreactions",
-      "picker-font-color"
-    )}`,
-    "--secondary-text-color": `#${game.settings.get(
-      "chatreactions",
-      "picker-font-color"
-    )}75`,
-    "--category-tab-color": `#${game.settings.get(
-      "chatreactions",
-      "category-active-icon-color"
-    )}75`,
-    "--category-tab-active-color": `#${game.settings.get(
-      "chatreactions",
-      "category-active-icon-color"
-    )}`,
+    "--background-color": `#${pickerColor("picker-background")}`,
+    "--secondary-background-color": `#${pickerColor("picker-background")}`,
+    "--category-name-background-color": `#${pickerColor("picker-background")}`,
+    "--category-name-text-color": `#${pickerColor("picker-font-color")}75`,
+    "--text-color": `#${pickerColor("picker-font-color")}`,
+    "--secondary-text-color": `#${pickerColor("picker-font-color")}75`,
+    "--category-tab-color": `#${pickerColor("category-active-icon-color")}75`,
+    "--category-tab-active-color": `#${pickerColor("category-active-icon-color")}`,
     "--hover-background-color": "#e7f3f8",
   };
   $("head").append(`<style class="emoji-picker__styles">.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
+});
+
+Hooks.once("ready", () => {
+  migratePickerColors();
+
+  // Everyone learns about custom emojis (a player may point the GM at the setting), once per connection and only in
+  // the console: a notification on every load could not be turned off
+  if (game.settings.get("chatreactions", "chat-reactions-directory") === "") {
+    console.warn(utils.localize("warnings.noDirectory"));
+  }
 });
 
 function onEmojiInput(selection) {
@@ -362,7 +343,23 @@ async function socketExecute(emoji, message) {
   }
 }
 
+// Reactions to a message are applied one after another: each one reads the flag the previous one wrote, so quick
+// reactions from several users no longer overwrite each other
+const reactionQueues = new Map<string, Promise<void>>();
+
 function handleReaction(emoji: string, sentMessageID: string, user: string) {
+  const previous = reactionQueues.get(sentMessageID) ?? Promise.resolve();
+  // A failed write is logged on the GM and does not stop the queue
+  const queued = previous.then(() => applyReaction(emoji, sentMessageID, user))
+    .catch((error) => console.error("Chat Reactions:", error));
+  reactionQueues.set(sentMessageID, queued);
+  queued.then(() => {
+    if (reactionQueues.get(sentMessageID) === queued) reactionQueues.delete(sentMessageID);
+  });
+  return queued;
+}
+
+async function applyReaction(emoji: string, sentMessageID: string, user: string) {
   let currentEmojiState = {};
 
   // Get Current State of Emojis if it exists
@@ -390,7 +387,7 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
   } else {
     currentEmojiState[emoji] = [user];
   }
-  sentMessage?.setFlag("world", "emoji", JSON.stringify(currentEmojiState));
+  await sentMessage?.setFlag("world", "emoji", JSON.stringify(currentEmojiState));
 }
 
 async function loadDirectory(directory: string) {
