@@ -1,11 +1,16 @@
 {
   "I18N.LANGUAGE": "English",
   "I18N.MAINTAINERS": "YourFavouriteOreo#6798",
-
   "chatreactions": {
     "title": "Chat Reactions",
     "warnings": {
-      "noDirectory": "Chat Reactions | Custom emojis are off because no emoji folder is set. A GM can choose a folder with emoji images in Configure Settings → Chat Reactions → Custom Emojis Directory."
+      "noDirectory": "Chat Reactions | Custom emojis are off because no emoji folder is set. A GM can choose a folder with emoji images in Configure Settings → Chat Reactions → Custom Emojis Directory.",
+      "noFileBrowser": "Chat Reactions | Custom emojis and emoji packs are hidden for you: they need the \"{permission}\" permission. Ask the GM to grant it to your role in Configure Permissions."
+    },
+    "card": {
+      "dayAtTime": "{day} at {time}",
+      "removeHint": "Click to remove your reaction.",
+      "unknownUser": "Unknown user"
     },
     "settings": {
       "emojipleter": {
@@ -26,7 +31,7 @@
       },
       "compactEmojiButton": {
         "name": "Compact Emoji Button",
-        "hint": "This replaces the add emoji button in the textbox with "
+        "hint": "Shows the add emoji button next to the chat input as a small smiley icon."
       }
     }
   }

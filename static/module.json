@@ -11,8 +11,8 @@
   "authors": [
     {
       "name": "YourFavouriteOreo",
-      "url":"https://github.com/YourFavouriteOreo",
-      "discord":"YourFavouriteOreo#6798"
+      "url": "https://github.com/YourFavouriteOreo",
+      "discord": "YourFavouriteOreo#6798"
     },
     {
       "name": "Asinphi",
@@ -54,6 +54,11 @@
       "lang": "en",
       "name": "English",
       "path": "languages/en.json"
+    },
+    {
+      "lang": "ru",
+      "name": "Русский",
+      "path": "languages/ru.json"
     }
   ],
   "url": "https://github.com/M-r-A/VTT-Chat-Reactions",
