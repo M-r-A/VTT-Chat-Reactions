@@ -1,13 +1,11 @@
 import { TemplatePreloader } from "./module/helper/TemplatePreloader";
-import DirectoryPicker from "./lib/DirectoryPicker";
 import { createPopup, PopupPickerController } from "@picmo/popup-picker";
 import { TwemojiRenderer } from "@picmo/renderer-twemoji";
 import utils from "./utils";
-// import ImagePicker from "./lib/ImagePicker";
 import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
-import EmojiPleter from "./emojipleter";
+import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
 
 declare global {
     interface LenientGlobalVariableTypes {
@@ -20,7 +18,8 @@ let socket;
 let picker: PopupPickerController;
 let popoutPicker: PopupPickerController; // Picker especially for the PopOut! module windows
 let currentMessage;
-let currentChatBox;
+let chatInputView; // ProseMirror EditorView of the chat input
+let emojiPleter: EmojiPleter | undefined;
 const emojiDirectories: any = [];
 const customEmojis: any = [];
 let categories = ['recents', 'custom', 'smileys-emotion', 'people-body', 'animals-nature', 'food-drink', 'activities', 'travel-places', 'objects', 'symbols', 'flags'];
@@ -68,8 +67,9 @@ Hooks.once("init", async () => {
     hint: utils.localize("settings.chatReactionsDirectory.hint"),
     scope: "world",
     config: true,
-    //@ts-ignore
-    type: DirectoryPicker.Directory,
+    type: String,
+    //@ts-ignore -- core renders a folder picker button for this option
+    filePicker: "folder",
     default: "",
     onChange: () => {
       window.location.reload();
@@ -223,6 +223,9 @@ Hooks.once("init", async () => {
   }
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
 
+  if (game.settings.get("chatreactions", "emojipleter"))
+    emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
+
   //   --category-button-color
 
   // --category-button-active-color
@@ -293,17 +296,7 @@ function onEmojiInput(selection) {
     // `selection` object has an `emoji` property
     // containing the selected emoji
     if (currentMessage === null) {
-      currentChatBox = currentChatBox || $("#chat-message");
-      currentChatBox.val(
-        insert(
-          currentChatBox.val(),
-          currentChatBox.prop("selectionStart"),
-          selection.hexcode ? selection.emoji : `:${selection.emoji}:`
-        )
-      );
-      setTimeout(() => {
-        currentChatBox[0].focus();
-      });
+      insertIntoChatInput(selection.hexcode ? selection.emoji : `:${selection.emoji}:`);
     } else {
       //@ts-ignore
       if (!selection.hexcode) {
@@ -333,8 +326,18 @@ function createPicker(rootElement: HTMLElement = document.body) {
   return newPicker;
 }
 
-function insert(str, index, value) {
-  return str.substring(0, index) + value + str.substring(index);
+// Insert text at the cursor of the chat input: a ProseMirror editor in v14, a textarea before
+function insertIntoChatInput(text: string) {
+  const view = chatInputView;
+  if (view) {
+    view.dispatch(view.state.tr.insertText(text));
+    view.focus();
+    return;
+  }
+  const textarea = document.querySelector<HTMLTextAreaElement>("textarea#chat-message");
+  if (!textarea) return;
+  textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end");
+  textarea.focus();
 }
 
 async function socketExecute(emoji, message) {
@@ -391,8 +394,10 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
 }
 
 async function loadDirectory(directory: string) {
-  const dir = DirectoryPicker.parse(directory);
-  await DirectoryPicker.browse(
+  const dir = utils.parseDirectory(directory);
+  // v13+ FilePicker is an ApplicationV2 in foundry.applications.apps; v12 has the global one
+  const Picker = (foundry as any).applications?.apps?.FilePicker?.implementation ?? FilePicker;
+  await Picker.browse(
     dir.activeSource,
     dir.current,
     {
@@ -421,7 +426,7 @@ function addToCustomEmojiList(fileList, customEmojis) {
 }
 
 function togglePicker(referenceEl: HTMLElement) {
-  if (!document.contains(referenceEl))
+  if (!document.contains(referenceEl) && popoutPicker)
     popoutPicker.toggle({
       triggerElement: referenceEl,
       referenceElement: referenceEl,
@@ -433,8 +438,8 @@ function togglePicker(referenceEl: HTMLElement) {
     })
 }
 
-Hooks.on("PopOut:loaded", (app: Application, node: HTMLElement) => {
-  if (app.element.find("#chat-message")) { // Chat window has been popped out into a new window
+Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
+  if (node.querySelector("#chat-message")) { // Chat window has been popped out into a new window
     popoutPicker = createPicker(node);
     // Clone sprite sheet to new window so emojis won't be invisible
     if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
@@ -443,68 +448,97 @@ Hooks.on("PopOut:loaded", (app: Application, node: HTMLElement) => {
   }
 });
 
-Hooks.on("renderChatLog", (_app, html, _options) => {
-  // Add EmojiPleter
-  if (game.settings.get("chatreactions", "emojipleter"))
-    new EmojiPleter(html.find("#chat-message")[0], customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
+// ProseMirror plugin for the chat input: keeps its view for inserting emojis and feeds the emojipleter
+function buildChatInputPlugin() {
+  const { Plugin } = (foundry as any).prosemirror.state;
+  return new Plugin({
+    view: (view) => {
+      chatInputView = view;
+      return {
+        update: (updated) => {
+          if (emojiPleter instanceof AutocompleteEmojiPleter) emojiPleter.onViewUpdate(updated);
+        },
+        destroy: () => {
+          if (chatInputView === view) chatInputView = undefined;
+          emojiPleter?.close();
+        },
+      };
+    },
+  });
+}
 
-  let button;
-  // Compact emoji button
-  if (game.settings.get("chatreactions", "compact-emoji-button")) {
-    button = document.createElement("a");
-    button.classList.add("emoji-picker-button--compact");
-    button.innerHTML = `<i class="fas fa-smile"></i>`;
-    let controlButtons: JQuery = html.find(".control-buttons");
-    if (controlButtons.length === 0) {
-      controlButtons = $(`<div class="control-buttons"></div>`);
-      controlButtons.appendTo(html.find("#chat-controls"));
-    }
-    controlButtons.append($(button));
+// The chat input (<prose-mirror id="chat-message">) asks for its ProseMirror plugins with a bubbling "plugins" event
+function onConfigurePlugins(event) {
+  if (!event.target?.closest?.("#chat-message")) return;
+  event.plugins.chatReactions = buildChatInputPlugin();
+}
 
-    setTimeout(() => {
-      // Compensate for the :has selector not being supported in old browsers - make compatible with DF Chat Enhancement buttons
-      html.find("#dfcp-rt-buttons :is(.chat-archive, .export-log, .chat-flush)").css("display", "none");
-    }, 1);
-  } else { // Normal emoji button
-    button = document.createElement("button");
-    button.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
-    button.className += "emojiPickerButton";
-    button.type = "button";
+// Catches the first editor activation, which happens before renderChatInput
+document.addEventListener("plugins", onConfigurePlugins);
+const watchedChatInputs = new WeakSet<HTMLElement>();
 
-    const chatForm = html.find("#chat-form")[0];
-    chatForm.classList += " relative ";
-    chatForm.appendChild(button);
-
-    { // Compensate for the :has selector not being supported in old browsers - add chatbox padding
-      const chatbox: JQuery = html.find("#chat-message");
-      chatbox.css("padding-left", "2.75em");
-      chatbox.css("padding-top", "0.75em");
-    }
+Hooks.on("renderChatInput", (_app, elements: Record<string, HTMLElement>) => {
+  // The input moves between the sidebar, the notifications area and other windows, so also listen on the element itself
+  const input = elements["#chat-message"];
+  if (input && !watchedChatInputs.has(input)) {
+    watchedChatInputs.add(input);
+    input.addEventListener("plugins", onConfigurePlugins);
   }
-  button.title = "Add emoji";
+
+  const controls = elements["#chat-controls"];
+  if (controls) addEmojiButton(controls);
+});
+
+// The core major version (12, 13, 14…); the bundled v9 types do not know release.generation
+function coreGeneration(): number {
+  return (game.release as any).generation;
+}
+
+// v12 has no renderChatInput: the chat log renders its own textarea and controls
+Hooks.on("renderChatLog", (_app, html) => {
+  if (coreGeneration() >= 13) return;
+  const controls = (html[0] ?? html).querySelector("#chat-controls") as HTMLElement | null;
+  if (!controls) return;
+  // As in v2.3.5, the button sits with the GM's export/clear buttons, which players do not have
+  let buttons = controls.querySelector<HTMLElement>(".control-buttons");
+  if (!buttons) {
+    buttons = document.createElement("div");
+    buttons.className = "control-buttons";
+    controls.append(buttons);
+  }
+  addEmojiButton(buttons);
+});
+
+// The emoji button next to the chat input
+function addEmojiButton(container: HTMLElement) {
+  if (container.querySelector(".chat-reactions-picker")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.classList.add("chat-reactions-picker", "ui-control", "icon");
+  if (game.settings.get("chatreactions", "compact-emoji-button")) {
+    button.classList.add("fa-solid", "fa-face-smile");
+  } else {
+    button.innerHTML = `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
+  }
+  button.dataset.tooltip = "Add emoji"; // data-tooltip works from v12 on (data-tooltip-text only from v13)
+  button.setAttribute("aria-label", "Add emoji");
   button.addEventListener("click", function () {
     togglePicker(button);
     currentMessage = null;
-    currentChatBox = html.find("#chat-message");
   });
-});
+  container.append(button);
+}
 
-Hooks.on("preRenderChatMessage", async (message, element) => {
-  let messagingElement = element.find(".flavor-text")[0];
-  if (messagingElement === undefined) {
-    messagingElement = element.find(".message-content")[0];
-  }
-  if (message.data.content.includes("<img")) {
-    messagingElement.innerHTML = message.data["_source"].content;
-  }
+// v13+ passes the message as an HTMLElement to renderChatMessageHTML; v12 only has renderChatMessage, with jQuery
+Hooks.once("init", () => {
+  if (coreGeneration() >= 13) Hooks.on("renderChatMessageHTML", renderMessage);
+  else Hooks.on("renderChatMessage", (message, html) => renderMessage(message, html[0] ?? html));
 });
 
 // Logic for Button Styling and Rendering
-Hooks.on("renderChatMessage", async (message, element: JQuery) => {
-  let messagingElement = element.find(".flavor-text")[0];
-  if (messagingElement === undefined) {
-    messagingElement = element.find(".message-content")[0];
-  }
+function renderMessage(message, element: HTMLElement) {
+  const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
+  if (!messagingElement) return;
 
   const emojiData = parse(messagingElement.innerText);
   emojiData.forEach((emoji) => {
@@ -559,7 +593,7 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
 
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
-  emojiRack.id = "chatReactionRack";
+  emojiRack.className = "chat-reactions-rack";
   for (const [key, value] of Object.entries(currentEmojiState)) {
     let isvoted = false;
     const button = document.createElement("button");
@@ -581,15 +615,16 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
       ButtonContent.innerHTML += `<svg class="emoji-image"><use xlink:href="#${toCodePoints(key).join('-')}"></use></svg>`;
     }
     ButtonContent.className = "emoji-button-content";
-    ButtonContent.title = voters.map((userId) => game.users?.get(userId)?.name).join(", ");
     ButtonContent.appendChild(EmojiReactions);
     button.appendChild(ButtonContent);
+    // Core v13+ styles disable pointer events on the children of buttons, so the button itself takes the hover and click
+    button.title = voters.map((userId) => game.users?.get(userId)?.name).join(", ");
     if (isvoted) {
       button.className = "emoji-button emoji-active ";
     } else {
       button.className = "emoji-button reaction";
     }
-    ButtonContent.addEventListener("click", function () {
+    button.addEventListener("click", function () {
       //@ts-ignore
       socketExecute(
         key,
@@ -604,17 +639,16 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
     const compactButton = document.createElement("a");
     compactButton.className = "compact-reaction-button";
     compactButton.innerHTML = "<i class='fas fa-smile'></i>";
-    element.find(".message-metadata")[0].appendChild(compactButton);
+    element.querySelector(".message-metadata")?.appendChild(compactButton);
 
     compactButton.addEventListener("click", function() {
       togglePicker(compactButton);
       currentMessage = message;
     });
-    if (jQuery.isEmptyObject(currentEmojiState)) return;
+    if (Object.keys(currentEmojiState).length === 0) return;
   }
 
   // Create Picker Button and add it to the Emoji Rack
-  const messageElement = element[0];
   if (Object.entries(currentEmojiState).length < 4) {
     const p = document.createElement("button");
     p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
@@ -626,8 +660,8 @@ Hooks.on("renderChatMessage", async (message, element: JQuery) => {
     });
     emojiRack.appendChild(p);
   }
-  messageElement?.appendChild(emojiRack);
-});
+  element.appendChild(emojiRack);
+}
 
 if (process.env.NODE_ENV === "development") {
   if (module.hot) {
