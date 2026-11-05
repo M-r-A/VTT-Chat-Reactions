@@ -33,6 +33,7 @@
   "dependencies": {
     "@picmo/popup-picker": "^5.8.5",
     "@picmo/renderer-twemoji": "^5.8.5",
+    "emojibase-data": "18.0.0",
     "picmo": "^5.8.5",
     "twemoji-parser": "^14.0.0"
   }

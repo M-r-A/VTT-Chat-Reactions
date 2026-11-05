@@ -1,5 +1,4 @@
 import { createPopup, PopupPickerController } from "@picmo/popup-picker";
-import { TwemojiRenderer } from "@picmo/renderer-twemoji";
 import utils from "./utils";
 
 import { toCodePoints } from "./common";
@@ -10,6 +9,7 @@ import {
 import { renderMessageEmojis } from "./message-emojis";
 import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
 import { freeName, nameFromFile } from "./custom-emoji-names";
+import { EMOJI_DATA, LocalTwemojiRenderer, prepareEmojiDatabase } from "./local-emoji-data";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -18,8 +18,11 @@ declare global {
 
 let socket;
 
-let picker: PopupPickerController;
-let popoutPicker: PopupPickerController; // Picker especially for the PopOut! module windows
+let picker: PopupPickerController | undefined;
+let popoutPicker: PopupPickerController | undefined; // Picker especially for the PopOut! module windows
+// picmo's emoji database, filled once from the data shipped with the module. Pickers are created after it: a picker
+// fills an empty database itself, and two fills at once in a fresh browser profile break it ("Failed to load emojis").
+let emojiDatabase: Promise<void> = Promise.resolve();
 let currentMessage;
 let chatInputView; // ProseMirror EditorView of the chat input
 let emojiPleter: EmojiPleter | undefined;
@@ -234,6 +237,8 @@ Hooks.once("init", async () => {
   }
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
 
+  // The picker and the suggestions share picmo's emoji database, filled from the data shipped with the module
+  emojiDatabase = prepareEmojiDatabase().catch((error) => console.error("Chat Reactions: emoji data", error));
   if (game.settings.get("chatreactions", "emojipleter"))
     emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
 
@@ -257,7 +262,7 @@ Hooks.once("init", async () => {
   const directory = game.settings.get("chatreactions", "chat-reactions-directory") as string;
   if (directory !== "") await loadDirectory(directory);
 
-  picker = createPicker();
+  emojiDatabase.then(() => { picker = createPicker(); });
 
   const pickerCssRules = {
     "--background-color": `#${pickerColor("picker-background")}`,
@@ -270,7 +275,9 @@ Hooks.once("init", async () => {
     "--category-tab-active-color": `#${pickerColor("category-active-icon-color")}`,
     "--hover-background-color": "#e7f3f8",
   };
-  $("head").append(`<style class="emoji-picker__styles">.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
+  // Two classes outweigh picmo's theme (.picmo__light), whichever style the page got first: picmo adds its own when the
+  // first picker is created, after the emoji data is ready
+  $("head").append(`<style class="emoji-picker__styles">.picmo__picker.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
 });
 
 Hooks.once("ready", () => {
@@ -307,7 +314,8 @@ function onEmojiInput(selection) {
 function createPicker(rootElement: HTMLElement = document.body) {
   const newPicker = createPopup({
     rootElement: rootElement,
-    renderer: new TwemojiRenderer(),
+    renderer: new LocalTwemojiRenderer(),
+    ...EMOJI_DATA,
     emojiVersion: 14,
     custom: customEmojis,
     categories: categories as any,
@@ -472,6 +480,10 @@ function reactionImage(key: string): string | undefined {
 }
 
 function togglePicker(referenceEl: HTMLElement) {
+  if (!picker) { // the emoji database is still being filled
+    emojiDatabase.then(() => togglePicker(referenceEl));
+    return;
+  }
   if (!document.contains(referenceEl) && popoutPicker)
     popoutPicker.toggle({
       triggerElement: referenceEl,
@@ -486,7 +498,7 @@ function togglePicker(referenceEl: HTMLElement) {
 
 Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
   if (node.querySelector("#chat-message")) { // Chat window has been popped out into a new window
-    popoutPicker = createPicker(node);
+    emojiDatabase.then(() => { popoutPicker = createPicker(node); });
     // Clone sprite sheet to new window so emojis won't be invisible
     if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
     const spriteSheet = document.getElementById("picmo-twemoji-sprites") as HTMLElement;
