@@ -160,5 +160,8 @@ To ready the project for release run the command: npm run build:production
 BadIdeasBureau, MrPrimate, Calego, Stäbchenfisch, Zeel, Arcanist, LukeAbby, Animu36 and many more from the League of Extraordinary FoundryVTT Developers for all the help and advice   
 Moerill for most of the emoji completion suggestion code: https://github.com/Moerill/Emojule  
 Picmo by JoeAttardi for Picker Functionality: https://github.com/joeattardi/picmo  
+Emoji graphics from Twemoji, Copyright 2019 Twitter, Inc and other contributors, licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/): https://github.com/jdecked/twemoji  
+Emoji data from Emojibase by Miles Johnson: https://emojibase.dev  
+The licenses of all bundled packages ship with the module in `THIRD-PARTY-NOTICES.txt`.  
 Used webpack and setup files as reference: https://github.com/anvil-vtt/FateX   
 Used github workflow and template reference: https://github.com/League-of-Foundry-Developers/FoundryVTT-Module-Template   
