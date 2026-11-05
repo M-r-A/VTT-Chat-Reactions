@@ -8,6 +8,7 @@ import {
   attachReactionCard, formatCount, formatReactionTime, hideReactionCard, readReactedAt, sortReactions
 } from "./reaction-card";
 import { renderMessageEmojis } from "./message-emojis";
+import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -381,6 +382,16 @@ function canSeeMessage(message, user): boolean {
   return whisper.length === 0 || whisper.includes(user.id) || authorId === user.id;
 }
 
+/**
+ * Whether the GM takes this as a reaction: one unicode emoji, or the image of a custom emoji this GM knows. A user may
+ * always take back their own reaction, even one that is no longer valid (a deleted custom emoji, say).
+ */
+function isValidReaction(emoji: unknown, current: Record<string, string[]>, user: string): emoji is string {
+  if (typeof emoji !== "string" || !emoji || emoji.length > MAX_REACTION_LENGTH) return false;
+  if (current[emoji]?.includes(user)) return true;
+  return isUnicodeEmoji(emoji) || customEmojis.some((custom) => custom.url === emoji);
+}
+
 async function applyReaction(emoji: string, sentMessageID: string, user: string | undefined) {
   const sentMessage = game.messages?.get(sentMessageID);
   const reactingUser = game.users?.get(user ?? "");
@@ -389,10 +400,8 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string 
   user = reactingUser.id as string;
 
   // Get Current State of Emojis if it exists
-  let currentEmojiState = {};
-  if (sentMessage.getFlag("world", "emoji")) {
-    currentEmojiState = JSON.parse(sentMessage.getFlag("world", "emoji") as string);
-  }
+  const currentEmojiState = readReactions(sentMessage);
+  if (!isValidReaction(emoji, currentEmojiState, user)) throw new Error(`Not a reaction: ${String(emoji).slice(0, 40)}`);
 
   // When each user reacted, kept beside the reactions (GM clock)
   const reactedAt = readReactedAt(sentMessage);
@@ -455,6 +464,11 @@ function addToCustomEmojiList(fileList, customEmojis) {
       url: value,
     });
   });
+}
+
+/** The image of a reaction that is a custom emoji: one of the known ones, or a path of this server. */
+function reactionImage(key: string): string | undefined {
+  return customEmojis.find((emoji) => emoji.url === key)?.url ?? (isLocalImagePath(key) ? key : undefined);
 }
 
 function togglePicker(referenceEl: HTMLElement) {
@@ -577,16 +591,17 @@ function renderMessage(message, element: HTMLElement) {
   // Unicode emojis and known custom emoji codes in the text become images; the message's own markup stays as it is
   renderMessageEmojis(messagingElement, (name) => customEmojis.find((emoji) => emoji.emoji === name)?.url);
 
-  let currentEmojiState = {};
-  // Get current state of emojis
-  if (message.getFlag("world", "emoji")) {
-    currentEmojiState = JSON.parse(message.getFlag("world", "emoji") as string);
-  }
+  // Reactions that are neither an emoji nor a known image are not shown: a message's author can write its flags
+  const currentEmojiState = readReactions(message);
+  let shown = 0;
 
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
   emojiRack.className = "chat-reactions-rack";
   for (const [key, value] of sortReactions(currentEmojiState, readReactedAt(message))) {
+    const image = key.includes("/") ? reactionImage(key) : undefined;
+    if (!image && !isUnicodeEmoji(key)) continue;
+    shown++;
     let isvoted = false;
     const button = document.createElement("button");
     button.dataset.emoji = key;
@@ -599,13 +614,17 @@ function renderMessage(message, element: HTMLElement) {
     const ButtonContent = document.createElement("div");
     const EmojiReactions = document.createElement("p");
     EmojiReactions.textContent = formatCount(voters.length);
-    if (key.includes("/")) { // Custom emoji
+    if (image) { // Custom emoji
       const EmojiImage = document.createElement("img");
       EmojiImage.className = "emoji-image";
-      EmojiImage.src = key;
+      EmojiImage.src = image;
       ButtonContent.appendChild(EmojiImage);
     } else {
-      ButtonContent.innerHTML += `<svg class="emoji-image"><use xlink:href="#${toCodePoints(key).join('-')}"></use></svg>`;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "emoji-image");
+      const use = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use"));
+      use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${toCodePoints(key).join("-")}`);
+      ButtonContent.appendChild(svg);
     }
     ButtonContent.className = "emoji-button-content";
     ButtonContent.appendChild(EmojiReactions);
@@ -640,11 +659,11 @@ function renderMessage(message, element: HTMLElement) {
       togglePicker(compactButton);
       currentMessage = message;
     });
-    if (Object.keys(currentEmojiState).length === 0) return;
+    if (shown === 0) return;
   }
 
   // Create Picker Button and add it to the Emoji Rack
-  if (Object.entries(currentEmojiState).length < 4) {
+  if (shown < 4) {
     const p = document.createElement("button");
     p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
     p.className += "emoji-button trigger";
