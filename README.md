@@ -56,7 +56,7 @@ The picker requires an Object with the following information for custom emoji
 ```
 ### 
 ## On SocketLib.ready
-This event is a custom event for the [Stäbchenfisch's Socketlib module](https://github.com/manuelVo/foundryvtt-socketlib) which is used to handle functions remotely as a GM. It is explained [here](#On-Emoji) if you want to be naughty and skip ahead.
+This event is a custom event for the [socketlib module](https://foundryvtt.com/packages/socketlib) (by Stäbchenfisch, now maintained by Farling) which is used to handle functions remotely as a GM. It is explained [here](#On-Emoji) if you want to be naughty and skip ahead.
 ## On Init
 As per the BadIdeasBureau's suggestion, the module looks through all the other active modules for an **emojiPack** flag. This flag should be of type **String** that points to the directory that contains emojis in the modules folder, starting with `/`. For example, a pack module with emojis in `modules/my-emoji-pack/emojis` has this in its `module.json`:
 
@@ -110,7 +110,7 @@ This button is rendered at the end of the list of buttons and triggers the emoji
 ## On Emoji
 This is a custom event for the picker that returns the selection of the user.
 
-Though a small function on its own is where a lot of the magic happens. The module uses  [Stäbchenfisch's Socketlib](https://github.com/manuelVo/foundryvtt-socketlib) module to launch an execute as GM function because in games where only the GM has the ability to modify chat messages this allows any user to still react when a GM is present and kind of side stepping the restrictions for this one use case.
+Though a small function on its own is where a lot of the magic happens. The module uses  [socketlib](https://foundryvtt.com/packages/socketlib) module to launch an execute as GM function because in games where only the GM has the ability to modify chat messages this allows any user to still react when a GM is present and kind of side stepping the restrictions for this one use case.
 
 The function remotely launches the **handleReaction** function and passes the emoji data, focusedMessage and the user data of the one who requested it
 
