@@ -1,0 +1,12 @@
+# Updates for npm packages and for the GitHub Actions of the workflows, which are pinned to commit SHAs
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
