@@ -1,14 +1,15 @@
-import { TemplatePreloader } from "./module/helper/TemplatePreloader";
 import { createPopup, PopupPickerController } from "@picmo/popup-picker";
-import { TwemojiRenderer } from "@picmo/renderer-twemoji";
 import utils from "./utils";
-import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
 import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
 import {
   attachReactionCard, formatCount, formatReactionTime, hideReactionCard, readReactedAt, sortReactions
 } from "./reaction-card";
+import { renderMessageEmojis } from "./message-emojis";
+import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
+import { freeName, nameFromFile } from "./custom-emoji-names";
+import { EMOJI_DATA, LocalTwemojiRenderer, prepareEmojiDatabase } from "./local-emoji-data";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -17,8 +18,11 @@ declare global {
 
 let socket;
 
-let picker: PopupPickerController;
-let popoutPicker: PopupPickerController; // Picker especially for the PopOut! module windows
+let picker: PopupPickerController | undefined;
+let popoutPicker: PopupPickerController | undefined; // Picker especially for the PopOut! module windows
+// picmo's emoji database, filled once from the data shipped with the module. Pickers are created after it: a picker
+// fills an empty database itself, and two fills at once in a fresh browser profile break it ("Failed to load emojis").
+let emojiDatabase: Promise<void> = Promise.resolve();
 let currentMessage;
 let chatInputView; // ProseMirror EditorView of the chat input
 let emojiPleter: EmojiPleter | undefined;
@@ -31,8 +35,11 @@ Hooks.once("socketlib.ready", () => {
   // Setup Socket Lib for GM ability to add Chat Reactions
   // @ts-ignore
   socket = socketlib.registerModule("chatreactions");
-  // @ts-ignore
-  socket.register("handleReaction", handleReaction);
+  // The reacting user is the sender as the server reports it (this.socketdata), never the user id in the arguments,
+  // which earlier versions trusted and which clients still send
+  socket.register("handleReaction", function (this, emoji: string, messageId: string) {
+    return handleReaction(emoji, messageId, this?.socketdata?.userId);
+  });
 });
 
 // Default picker colors. They carry the "#": v13+ cores JSON.parse string settings, so a bare "782e22" would come
@@ -230,6 +237,9 @@ Hooks.once("init", async () => {
   }
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
 
+  // The pickers read picmo's emoji database, filled from the data shipped with the module; the suggestions search the
+  // data itself
+  emojiDatabase = prepareEmojiDatabase().catch((error) => console.error("Chat Reactions: emoji data", error));
   if (game.settings.get("chatreactions", "emojipleter"))
     emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
 
@@ -253,7 +263,7 @@ Hooks.once("init", async () => {
   const directory = game.settings.get("chatreactions", "chat-reactions-directory") as string;
   if (directory !== "") await loadDirectory(directory);
 
-  picker = createPicker();
+  emojiDatabase.then(() => { picker = createPicker(); });
 
   const pickerCssRules = {
     "--background-color": `#${pickerColor("picker-background")}`,
@@ -266,7 +276,9 @@ Hooks.once("init", async () => {
     "--category-tab-active-color": `#${pickerColor("category-active-icon-color")}`,
     "--hover-background-color": "#e7f3f8",
   };
-  $("head").append(`<style class="emoji-picker__styles">.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
+  // Two classes outweigh picmo's theme (.picmo__light), whichever style the page got first: picmo adds its own when the
+  // first picker is created, after the emoji data is ready
+  $("head").append(`<style class="emoji-picker__styles">.picmo__picker.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
 });
 
 Hooks.once("ready", () => {
@@ -303,7 +315,8 @@ function onEmojiInput(selection) {
 function createPicker(rootElement: HTMLElement = document.body) {
   const newPicker = createPopup({
     rootElement: rootElement,
-    renderer: new TwemojiRenderer(),
+    renderer: new LocalTwemojiRenderer(),
+    ...EMOJI_DATA,
     emojiVersion: 14,
     custom: customEmojis,
     categories: categories as any,
@@ -359,7 +372,7 @@ async function socketExecute(emoji, message) {
 // reactions from several users no longer overwrite each other
 const reactionQueues = new Map<string, Promise<void>>();
 
-function handleReaction(emoji: string, sentMessageID: string, user: string) {
+function handleReaction(emoji: string, sentMessageID: string, user: string | undefined) {
   const previous = reactionQueues.get(sentMessageID) ?? Promise.resolve();
   // A failed write is logged on the GM and does not stop the queue
   const queued = previous.then(() => applyReaction(emoji, sentMessageID, user))
@@ -371,16 +384,34 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
   return queued;
 }
 
-async function applyReaction(emoji: string, sentMessageID: string, user: string) {
-  let currentEmojiState = {};
+/** Whether the user sees the message: a whisper only its author and recipients do, the GM always. */
+function canSeeMessage(message, user): boolean {
+  if (user.isGM) return true;
+  const whisper: string[] = message.whisper ?? [];
+  const authorId = message.author?.id;
+  return whisper.length === 0 || whisper.includes(user.id) || authorId === user.id;
+}
+
+/**
+ * Whether the GM takes this as a reaction: one unicode emoji, or the image of a custom emoji this GM knows. A user may
+ * always take back their own reaction, even one that is no longer valid (a deleted custom emoji, say).
+ */
+function isValidReaction(emoji: unknown, current: Record<string, string[]>, user: string): emoji is string {
+  if (typeof emoji !== "string" || !emoji || emoji.length > MAX_REACTION_LENGTH) return false;
+  if (current[emoji]?.includes(user)) return true;
+  return isUnicodeEmoji(emoji) || customEmojis.some((custom) => custom.url === emoji);
+}
+
+async function applyReaction(emoji: string, sentMessageID: string, user: string | undefined) {
+  const sentMessage = game.messages?.get(sentMessageID);
+  const reactingUser = game.users?.get(user ?? "");
+  if (!sentMessage || !reactingUser) throw new Error(`No message ${sentMessageID} or user ${user}`);
+  if (!canSeeMessage(sentMessage, reactingUser)) throw new Error(`${reactingUser.name} cannot see message ${sentMessageID}`);
+  user = reactingUser.id as string;
 
   // Get Current State of Emojis if it exists
-  const sentMessage = game.messages?.get(sentMessageID);
-  if (sentMessage?.getFlag("world", "emoji")) {
-    currentEmojiState = JSON.parse(
-      sentMessage?.getFlag("world", "emoji") as string
-    );
-  }
+  const currentEmojiState = readReactions(sentMessage);
+  if (!isValidReaction(emoji, currentEmojiState, user)) throw new Error(`Not a reaction: ${String(emoji).slice(0, 40)}`);
 
   // When each user reacted, kept beside the reactions (GM clock)
   const reactedAt = readReactedAt(sentMessage);
@@ -433,19 +464,27 @@ async function loadDirectory(directory: string) {
   });
 }
 
-// Get all emoji image files from the directory and add them to the picker
+// Get all emoji image files from the directory and add them to the picker. Names come from the file names, with only
+// the characters a message can hold between colons; a second file of the same name gets _2.
 function addToCustomEmojiList(fileList, customEmojis) {
-  fileList["files"].forEach(function(value) {
-    const name = `${value.split("/").pop(-1).split(".").slice(0, -1).join(".")}`.replace(/%20/g, " ");
-    customEmojis.push({
-      label: name,
-      emoji: name.replace(/ /g, "_"),
-      url: value,
-    });
-  });
+  const taken = new Set<string>(customEmojis.map((emoji) => emoji.emoji.toLowerCase()));
+  for (const url of fileList.files as string[]) {
+    const name = freeName(nameFromFile(url), taken);
+    taken.add(name.toLowerCase());
+    customEmojis.push({ label: name, emoji: name, url });
+  }
+}
+
+/** The image of a reaction that is a custom emoji: one of the known ones, or a path of this server. */
+function reactionImage(key: string): string | undefined {
+  return customEmojis.find((emoji) => emoji.url === key)?.url ?? (isLocalImagePath(key) ? key : undefined);
 }
 
 function togglePicker(referenceEl: HTMLElement) {
+  if (!picker) { // the emoji database is still being filled
+    emojiDatabase.then(() => togglePicker(referenceEl));
+    return;
+  }
   if (!document.contains(referenceEl) && popoutPicker)
     popoutPicker.toggle({
       triggerElement: referenceEl,
@@ -460,7 +499,7 @@ function togglePicker(referenceEl: HTMLElement) {
 
 Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
   if (node.querySelector("#chat-message")) { // Chat window has been popped out into a new window
-    popoutPicker = createPicker(node);
+    emojiDatabase.then(() => { popoutPicker = createPicker(node); });
     // Clone sprite sheet to new window so emojis won't be invisible
     if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
     const spriteSheet = document.getElementById("picmo-twemoji-sprites") as HTMLElement;
@@ -562,61 +601,20 @@ function renderMessage(message, element: HTMLElement) {
   const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
   if (!messagingElement) return;
 
-  const emojiData = parse(messagingElement.innerText);
-  emojiData.forEach((emoji) => {
-    const splitText = messagingElement.innerHTML.split(emoji.text);
-    messagingElement.innerHTML = "";
-    splitText.forEach((text, index) => {
-      messagingElement.innerHTML += text;
-      if (emoji.url && index < splitText.length - 1) {
-        messagingElement.innerHTML += `<svg class="twemoji emoji"><use xlink:href="#${toCodePoints(emoji.text).join('-')}"></use></svg>`;
-      }
-    });
-  });
-  const match = new RegExp(":[a-zA-Z0-9_]*:");
-  let matchResult = match.exec(messagingElement.innerHTML);
+  // Unicode emojis and known custom emoji codes in the text become images; the message's own markup stays as it is
+  renderMessageEmojis(messagingElement, (name) => customEmojis.find((emoji) => emoji.emoji === name)?.url);
 
-  while (matchResult != null) {
-    const result = customEmojis.filter((customEmoji) => {
-      //@ts-ignore
-      return customEmoji.emoji === matchResult[0].replace(/:/g, "");
-    });
-    if (result.length > 0) {
-      messagingElement.innerHTML = messagingElement.innerHTML.replace(
-        matchResult[0],
-        `<img class="emoji" src="${
-          result[0].url
-        }"/>`
-      );
-    } else {
-      messagingElement.innerHTML = messagingElement.innerHTML.replace(
-        matchResult[0],
-        matchResult[0].replace(/:/g, "") 
-      );
-    }
-
-    matchResult = match.exec(messagingElement.innerHTML);
-  }
- 
-  const regex = /^\s*$/;
-  if (messagingElement.innerText.replace(regex, "") === "") {
-    for (let i = 0; i < messagingElement.children.length; i++) {
-      if(messagingElement.children[i].classList.contains("emoji")){
-        messagingElement.children[i].classList.add("emoji-large")
-      }
-    }
-  }
-
-  let currentEmojiState = {};
-  // Get current state of emojis
-  if (message.getFlag("world", "emoji")) {
-    currentEmojiState = JSON.parse(message.getFlag("world", "emoji") as string);
-  }
+  // Reactions that are neither an emoji nor a known image are not shown: a message's author can write its flags
+  const currentEmojiState = readReactions(message);
+  let shown = 0;
 
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
   emojiRack.className = "chat-reactions-rack";
   for (const [key, value] of sortReactions(currentEmojiState, readReactedAt(message))) {
+    const image = key.includes("/") ? reactionImage(key) : undefined;
+    if (!image && !isUnicodeEmoji(key)) continue;
+    shown++;
     let isvoted = false;
     const button = document.createElement("button");
     button.dataset.emoji = key;
@@ -629,13 +627,17 @@ function renderMessage(message, element: HTMLElement) {
     const ButtonContent = document.createElement("div");
     const EmojiReactions = document.createElement("p");
     EmojiReactions.textContent = formatCount(voters.length);
-    if (key.includes("/")) { // Custom emoji
+    if (image) { // Custom emoji
       const EmojiImage = document.createElement("img");
       EmojiImage.className = "emoji-image";
-      EmojiImage.src = key;
+      EmojiImage.src = image;
       ButtonContent.appendChild(EmojiImage);
     } else {
-      ButtonContent.innerHTML += `<svg class="emoji-image"><use xlink:href="#${toCodePoints(key).join('-')}"></use></svg>`;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "emoji-image");
+      const use = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use"));
+      use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${toCodePoints(key).join("-")}`);
+      ButtonContent.appendChild(svg);
     }
     ButtonContent.className = "emoji-button-content";
     ButtonContent.appendChild(EmojiReactions);
@@ -670,11 +672,11 @@ function renderMessage(message, element: HTMLElement) {
       togglePicker(compactButton);
       currentMessage = message;
     });
-    if (Object.keys(currentEmojiState).length === 0) return;
+    if (shown === 0) return;
   }
 
   // Create Picker Button and add it to the Emoji Rack
-  if (Object.entries(currentEmojiState).length < 4) {
+  if (shown < 4) {
     const p = document.createElement("button");
     p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
     p.className += "emoji-button trigger";
@@ -686,26 +688,4 @@ function renderMessage(message, element: HTMLElement) {
     emojiRack.appendChild(p);
   }
   element.appendChild(emojiRack);
-}
-
-if (process.env.NODE_ENV === "development") {
-  if (module.hot) {
-    module.hot.accept();
-
-    if (module.hot.status() === "apply") {
-      for (const template in _templateCache) {
-        if (Object.prototype.hasOwnProperty.call(_templateCache, template)) {
-          delete _templateCache[template];
-        }
-      }
-
-      TemplatePreloader.preloadHandlebarsTemplates().then(() => {
-        for (const application in ui.windows) {
-          if (Object.prototype.hasOwnProperty.call(ui.windows, application)) {
-            ui.windows[application].render(true);
-          }
-        }
-      });
-    }
-  }
 }

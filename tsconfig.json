@@ -2,9 +2,9 @@
   "compilerOptions": {
     "target": "es2018",
     "module": "esnext",
-    "lib": [ "es2015", "es2019", "dom" ],
-    "types": [ "@league-of-foundry-developers/foundry-vtt-types", "webpack-env" ],
-    "moduleResolution": "node",
+    "lib": [ "esnext", "dom", "dom.iterable" ],
+    "types": [ "fvtt-types" ],
+    "moduleResolution": "bundler",
     "sourceMap": true,
     "strict": true,
     "allowJs": true,

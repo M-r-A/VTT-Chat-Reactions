@@ -6,12 +6,25 @@ export type ReactedAt = Record<string, Record<string, number>>;
 
 // Stored as a JSON string, like flags.world.emoji: custom emoji keys are file paths, and their dots would split a
 // nested flag path
+// Objects without a prototype, with numbers only: keys such as "__proto__" stay plain keys.
 export function readReactedAt(message): ReactedAt {
+  const reactedAt: ReactedAt = Object.create(null);
+  let stored;
   try {
-    return JSON.parse(message?.getFlag("chatreactions", "reactedAt") ?? "{}");
+    stored = JSON.parse(message?.getFlag("chatreactions", "reactedAt") ?? "{}");
   } catch {
-    return {};
+    return reactedAt;
   }
+  if (!stored || typeof stored !== "object") return reactedAt;
+  for (const [emoji, times] of Object.entries(stored)) {
+    if (!times || typeof times !== "object") continue;
+    const kept: Record<string, number> = Object.create(null);
+    for (const [user, time] of Object.entries(times as Record<string, unknown>)) {
+      if (typeof time === "number" && Number.isFinite(time)) kept[user] = time;
+    }
+    reactedAt[emoji] = kept;
+  }
+  return reactedAt;
 }
 
 /**

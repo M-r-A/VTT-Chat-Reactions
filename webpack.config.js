@@ -1,16 +1,7 @@
 /* eslint-disable */
-const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const ESLintPlugin = require("eslint-webpack-plugin");
 const path = require("path");
-const glob = require("glob");
-
-const allTemplates = () => {
-    return glob
-        .sync("**/*.html", { cwd: path.join(__dirname, "static/templates") })
-        .map((file) => `"modules/template/templates/${file}"`)
-        .join(", ");
-};
 
 module.exports = (env) => {
     const defaults = {
@@ -34,45 +25,13 @@ module.exports = (env) => {
             filename: "chatreactions.js",
             path: path.resolve(__dirname, "dist"),
             publicPath: '',
-        },
-        devServer: {
-            hot: true,
-            writeToDisk: true,
-            proxy: [
-                {
-                    context: (pathname) => {
-                        return !pathname.match("^/sockjs");
-                    },
-                    target: "http://localhost:30000",
-                    ws: true,
-                },
-            ],
+            clean: true,
         },
         module: {
             rules: [
-                isDevelopment
-                    ? {
-                        test: /\.html$/,
-                        loader: "raw-loader",
-                    }
-                    : {
-                        test: /\.html$/,
-                        loader: "null-loader",
-                    },
                 {
                     test: /\.ts$/,
-                    use: [
-                        "ts-loader",
-                        "webpack-import-glob-loader",
-                        "source-map-loader",
-                        {
-                            loader: "string-replace-loader",
-                            options: {
-                                search: '"__ALL_TEMPLATES__"',
-                                replace: allTemplates,
-                            },
-                        },
-                    ],
+                    use: ["ts-loader", "source-map-loader"],
                 },
                 {
                     test: /\.(png|svg|jpg|jpeg|gif)$/i,
@@ -81,7 +40,6 @@ module.exports = (env) => {
             ],
         },
         plugins: [
-            new CleanWebpackPlugin(),
             new ESLintPlugin({
                 extensions: ["ts"],
             }),

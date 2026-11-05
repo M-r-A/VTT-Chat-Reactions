@@ -1,6 +1,7 @@
-import {CustomEmoji, EmojiRecord, IndexedDbStoreFactory } from "picmo";
+import { CustomEmoji, EmojiRecord } from "picmo";
 
-import {toCodePoints} from "./common";
+import { toCodePoints } from "./common";
+import { EMOJI_DATA } from "./local-emoji-data";
 
 // A colon followed by at least two word characters, right before the cursor
 const QUERY_PATTERN = /(?:^|\s)(:[\w-]{2,})$/;
@@ -33,67 +34,62 @@ function labelOf(e: EmojiRecord): DocumentFragment {
   return label;
 }
 
+/** An emoji with its label and tags in lower case, for matching a query without converting them each time. */
+interface SearchEntry {
+  emoji: EmojiRecord;
+  terms: string[];
+}
+
+function searchEntry(emoji: EmojiRecord): SearchEntry {
+  return { emoji, terms: [emoji.label, ...(emoji.tags ?? [])].map(term => term.toLowerCase()) };
+}
+
+// The shipped emoji data, in the order of picmo's database (by the emoji's code units), which the suggestions came in
+// when they were read from it
+let unicodeEntries: SearchEntry[] | undefined;
+function unicodeEmojis(): SearchEntry[] {
+  unicodeEntries ??= (EMOJI_DATA.emojiData as EmojiRecord[])
+    .slice()
+    .sort((a, b) => a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0)
+    .map(searchEntry);
+  return unicodeEntries;
+}
+
 /**
- * Searches emojis (custom ones first, then picmo's emoji database) for the `:query` typed in the chat input.
+ * Searches emojis (custom ones first, then the shipped emoji data) for the `:query` typed in the chat input.
+ * The search runs in memory: reading picmo's IndexedDB on each keystroke took seconds in some browsers, and found
+ * nothing while the database was still being filled.
  */
 abstract class EmojiSearch {
   private readonly _customEmojis: CustomEmoji[];
   private readonly _maxResults;
-  private _db;
-  private _lastSearchTime;
   protected _word = '';
 
   constructor(customEmojis: CustomEmoji[], maxResults) {
     this._customEmojis = customEmojis;
     this._maxResults = maxResults;
-    this._db = IndexedDbStoreFactory('en');
-    this._db.open();
   }
 
-  _queryMatches(emoji, query: string) {
-    return emoji.label.toLowerCase().includes(query.toLowerCase()) || emoji.tags?.some(tag => tag.toLowerCase().includes(query.toLowerCase()));
+  /** Suggestions for a `:query`: emojis whose label or a tag contains it, `-` standing for a space. */
+  _filter(word: string): EmojiRecord[] {
+    const query = word.substring(1).replace(/-/g, ' ').toLowerCase();
+    const results: EmojiRecord[] = [];
+    // Custom emojis can change at any time (uploads, settings), so they are matched as they are
+    for (const emoji of this._customEmojis) {
+      if (results.length >= this._maxResults) return results;
+      if (searchEntry(emoji as EmojiRecord).terms.some(term => term.includes(query))) results.push(emoji as EmojiRecord);
+    }
+    for (const { emoji, terms } of unicodeEmojis()) {
+      if (results.length >= this._maxResults) break;
+      if (terms.some(term => term.includes(query))) results.push(emoji);
+    }
+    return results;
   }
 
-  async _filter(str, searchStartTime) {
-    const str2 = str.substring(1).replace(/-/g, ' ');
-    const results: EmojiRecord[] = this._customEmojis.filter(emoji => this._queryMatches(emoji, str2));
-
-    return new Promise((resolve, reject) => {
-      if (results.length >= this._maxResults) return resolve(results); // Custom emojis already exceed result limit
-      const transaction = this._db.db.transaction("emoji", "readonly");
-      const emojiStore = transaction.objectStore("emoji");
-      const request = emojiStore.openCursor();
-
-      request.addEventListener("success", (event) => {
-        const cursor = event.target.result;
-        if (!cursor)
-          return resolve(results)
-
-        const emoji = cursor.value;
-        if (this._queryMatches(emoji, str2)) {
-          results.push(emoji);
-          if (results.length >= this._maxResults) {
-            return resolve(results);
-          }
-        }
-        cursor.continue();
-
-        if (this._lastSearchTime !== searchStartTime)
-          return resolve([]);
-      });
-
-      request.addEventListener("error", (error) => {
-        reject(error);
-      });
-    })
-  }
-
-  /** Suggestions for a query, or undefined when a newer search has started meanwhile. */
+  /** Suggestions for a query, or undefined when the input has moved on to another query meanwhile. */
   async search(word: string): Promise<EmojiRecord[] | undefined> {
-    const searchTime = Date.now();
-    this._lastSearchTime = searchTime;
-    const list = await this._filter(word, searchTime) as EmojiRecord[];
-    if (this._lastSearchTime !== searchTime || word !== this._word) return undefined;
+    const list = this._filter(word);
+    if (word !== this._word) return undefined;
     return list;
   }
 
