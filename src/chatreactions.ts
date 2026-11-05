@@ -9,6 +9,7 @@ import {
 } from "./reaction-card";
 import { renderMessageEmojis } from "./message-emojis";
 import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
+import { freeName, nameFromFile } from "./custom-emoji-names";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -454,16 +455,15 @@ async function loadDirectory(directory: string) {
   });
 }
 
-// Get all emoji image files from the directory and add them to the picker
+// Get all emoji image files from the directory and add them to the picker. Names come from the file names, with only
+// the characters a message can hold between colons; a second file of the same name gets _2.
 function addToCustomEmojiList(fileList, customEmojis) {
-  fileList["files"].forEach(function(value) {
-    const name = `${value.split("/").pop(-1).split(".").slice(0, -1).join(".")}`.replace(/%20/g, " ");
-    customEmojis.push({
-      label: name,
-      emoji: name.replace(/ /g, "_"),
-      url: value,
-    });
-  });
+  const taken = new Set<string>(customEmojis.map((emoji) => emoji.emoji.toLowerCase()));
+  for (const url of fileList.files as string[]) {
+    const name = freeName(nameFromFile(url), taken);
+    taken.add(name.toLowerCase());
+    customEmojis.push({ label: name, emoji: name, url });
+  }
 }
 
 /** The image of a reaction that is a custom emoji: one of the known ones, or a path of this server. */
