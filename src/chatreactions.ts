@@ -1,13 +1,13 @@
 import { createPopup, PopupPickerController } from "@picmo/popup-picker";
 import { TwemojiRenderer } from "@picmo/renderer-twemoji";
 import utils from "./utils";
-import { parse } from "twemoji-parser";
 
 import { toCodePoints } from "./common";
 import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
 import {
   attachReactionCard, formatCount, formatReactionTime, hideReactionCard, readReactedAt, sortReactions
 } from "./reaction-card";
+import { renderMessageEmojis } from "./message-emojis";
 declare global {
     interface LenientGlobalVariableTypes {
         game: never;
@@ -561,50 +561,8 @@ function renderMessage(message, element: HTMLElement) {
   const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
   if (!messagingElement) return;
 
-  const emojiData = parse(messagingElement.innerText);
-  emojiData.forEach((emoji) => {
-    const splitText = messagingElement.innerHTML.split(emoji.text);
-    messagingElement.innerHTML = "";
-    splitText.forEach((text, index) => {
-      messagingElement.innerHTML += text;
-      if (emoji.url && index < splitText.length - 1) {
-        messagingElement.innerHTML += `<svg class="twemoji emoji"><use xlink:href="#${toCodePoints(emoji.text).join('-')}"></use></svg>`;
-      }
-    });
-  });
-  const match = new RegExp(":[a-zA-Z0-9_]*:");
-  let matchResult = match.exec(messagingElement.innerHTML);
-
-  while (matchResult != null) {
-    const result = customEmojis.filter((customEmoji) => {
-      //@ts-ignore
-      return customEmoji.emoji === matchResult[0].replace(/:/g, "");
-    });
-    if (result.length > 0) {
-      messagingElement.innerHTML = messagingElement.innerHTML.replace(
-        matchResult[0],
-        `<img class="emoji" src="${
-          result[0].url
-        }"/>`
-      );
-    } else {
-      messagingElement.innerHTML = messagingElement.innerHTML.replace(
-        matchResult[0],
-        matchResult[0].replace(/:/g, "") 
-      );
-    }
-
-    matchResult = match.exec(messagingElement.innerHTML);
-  }
- 
-  const regex = /^\s*$/;
-  if (messagingElement.innerText.replace(regex, "") === "") {
-    for (let i = 0; i < messagingElement.children.length; i++) {
-      if(messagingElement.children[i].classList.contains("emoji")){
-        messagingElement.children[i].classList.add("emoji-large")
-      }
-    }
-  }
+  // Unicode emojis and known custom emoji codes in the text become images; the message's own markup stays as it is
+  renderMessageEmojis(messagingElement, (name) => customEmojis.find((emoji) => emoji.emoji === name)?.url);
 
   let currentEmojiState = {};
   // Get current state of emojis
