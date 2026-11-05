@@ -30,8 +30,11 @@ Hooks.once("socketlib.ready", () => {
   // Setup Socket Lib for GM ability to add Chat Reactions
   // @ts-ignore
   socket = socketlib.registerModule("chatreactions");
-  // @ts-ignore
-  socket.register("handleReaction", handleReaction);
+  // The reacting user is the sender as the server reports it (this.socketdata), never the user id in the arguments,
+  // which earlier versions trusted and which clients still send
+  socket.register("handleReaction", function (this, emoji: string, messageId: string) {
+    return handleReaction(emoji, messageId, this?.socketdata?.userId);
+  });
 });
 
 // Default picker colors. They carry the "#": v13+ cores JSON.parse string settings, so a bare "782e22" would come
@@ -358,7 +361,7 @@ async function socketExecute(emoji, message) {
 // reactions from several users no longer overwrite each other
 const reactionQueues = new Map<string, Promise<void>>();
 
-function handleReaction(emoji: string, sentMessageID: string, user: string) {
+function handleReaction(emoji: string, sentMessageID: string, user: string | undefined) {
   const previous = reactionQueues.get(sentMessageID) ?? Promise.resolve();
   // A failed write is logged on the GM and does not stop the queue
   const queued = previous.then(() => applyReaction(emoji, sentMessageID, user))
@@ -370,15 +373,25 @@ function handleReaction(emoji: string, sentMessageID: string, user: string) {
   return queued;
 }
 
-async function applyReaction(emoji: string, sentMessageID: string, user: string) {
-  let currentEmojiState = {};
+/** Whether the user sees the message: a whisper only its author and recipients do, the GM always. */
+function canSeeMessage(message, user): boolean {
+  if (user.isGM) return true;
+  const whisper: string[] = message.whisper ?? [];
+  const authorId = message.author?.id;
+  return whisper.length === 0 || whisper.includes(user.id) || authorId === user.id;
+}
+
+async function applyReaction(emoji: string, sentMessageID: string, user: string | undefined) {
+  const sentMessage = game.messages?.get(sentMessageID);
+  const reactingUser = game.users?.get(user ?? "");
+  if (!sentMessage || !reactingUser) throw new Error(`No message ${sentMessageID} or user ${user}`);
+  if (!canSeeMessage(sentMessage, reactingUser)) throw new Error(`${reactingUser.name} cannot see message ${sentMessageID}`);
+  user = reactingUser.id as string;
 
   // Get Current State of Emojis if it exists
-  const sentMessage = game.messages?.get(sentMessageID);
-  if (sentMessage?.getFlag("world", "emoji")) {
-    currentEmojiState = JSON.parse(
-      sentMessage?.getFlag("world", "emoji") as string
-    );
+  let currentEmojiState = {};
+  if (sentMessage.getFlag("world", "emoji")) {
+    currentEmojiState = JSON.parse(sentMessage.getFlag("world", "emoji") as string);
   }
 
   // When each user reacted, kept beside the reactions (GM clock)
