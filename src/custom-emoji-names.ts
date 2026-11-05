@@ -11,7 +11,12 @@ export function nameFromFile(file: string): string {
     // not percent-encoded
   }
   base = base.includes(".") ? base.slice(0, base.lastIndexOf(".")) : base;
-  return base.replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32) || "emoji";
+  return (
+    base
+      .replace(/[^A-Za-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32) || "emoji"
+  );
 }
 
 /** The name, or the name with _2, _3… when another emoji has it already. */

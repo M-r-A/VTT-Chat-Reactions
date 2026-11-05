@@ -4,16 +4,21 @@ import utils from "./utils";
 import { toCodePoints } from "./common";
 import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
 import {
-  attachReactionCard, formatCount, formatReactionTime, hideReactionCard, readReactedAt, sortReactions
+  attachReactionCard,
+  formatCount,
+  formatReactionTime,
+  hideReactionCard,
+  readReactedAt,
+  sortReactions,
 } from "./reaction-card";
 import { renderMessageEmojis } from "./message-emojis";
 import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
 import { freeName, nameFromFile } from "./custom-emoji-names";
 import { EMOJI_DATA, LocalTwemojiRenderer, prepareEmojiDatabase } from "./local-emoji-data";
 declare global {
-    interface LenientGlobalVariableTypes {
-        game: never;
-    }
+  interface LenientGlobalVariableTypes {
+    game: never;
+  }
 }
 
 let socket;
@@ -29,7 +34,19 @@ let emojiPleter: EmojiPleter | undefined;
 const emojiDirectories: any = [];
 const customEmojis: any = [];
 let fileBrowserDenied = false; // a custom emoji folder could not be read: the user may not browse files
-let categories = ['recents', 'custom', 'smileys-emotion', 'people-body', 'animals-nature', 'food-drink', 'activities', 'travel-places', 'objects', 'symbols', 'flags'];
+let categories = [
+  "recents",
+  "custom",
+  "smileys-emotion",
+  "people-body",
+  "animals-nature",
+  "food-drink",
+  "activities",
+  "travel-places",
+  "objects",
+  "symbols",
+  "flags",
+];
 
 Hooks.once("socketlib.ready", () => {
   // Setup Socket Lib for GM ability to add Chat Reactions
@@ -107,9 +124,7 @@ async function migratePickerColors() {
 }
 
 Hooks.once("init", async () => {
-  console.log(
-    "===========================♥ Chat  Reactions ♥=========================="
-  );
+  console.log("===========================♥ Chat  Reactions ♥==========================");
 
   // Helpers other modules (and the tests) can use: game.modules.get("chatreactions").api
   (game.modules.get("chatreactions") as any).api = { formatCount, formatReactionTime, sortReactions };
@@ -151,7 +166,7 @@ Hooks.once("init", async () => {
     default: true,
     onChange: () => {
       window.location.reload();
-    }
+    },
   });
 
   game.settings.register("chatreactions", "emojipleter-max-results", {
@@ -163,8 +178,8 @@ Hooks.once("init", async () => {
     default: 13,
     onChange: () => {
       window.location.reload();
-    }
-  })
+    },
+  });
 
   game.settings.register("chatreactions", "compact-reaction-button", {
     name: utils.localize("settings.compactReactionButton.name"),
@@ -175,7 +190,7 @@ Hooks.once("init", async () => {
     default: true,
     onChange: () => {
       window.location.reload();
-    }
+    },
   });
 
   game.settings.register("chatreactions", "compact-emoji-button", {
@@ -187,15 +202,24 @@ Hooks.once("init", async () => {
     default: true,
     onChange: () => {
       window.location.reload();
-    }
+    },
   });
 
-  registerPickerColor("picker-background", "Background color for the picker",
-    "Background color that will appear behind the emoji picker");
-  registerPickerColor("picker-font-color", "Font color for the picker",
-    "Color used in the text for the emoji picker. This color will be contrasted for headers");
-  registerPickerColor("category-active-icon-color", "Font color for the active icon/category",
-    "Color for the active icon/category. This color will be contrasted for inactive");
+  registerPickerColor(
+    "picker-background",
+    "Background color for the picker",
+    "Background color that will appear behind the emoji picker",
+  );
+  registerPickerColor(
+    "picker-font-color",
+    "Font color for the picker",
+    "Color used in the text for the emoji picker. This color will be contrasted for headers",
+  );
+  registerPickerColor(
+    "category-active-icon-color",
+    "Font color for the active icon/category",
+    "Color for the active icon/category. This color will be contrasted for inactive",
+  );
 
   game.settings.register("chatreactions", "max-recents", {
     name: "Max recent emojis",
@@ -206,7 +230,7 @@ Hooks.once("init", async () => {
     default: 50,
     onChange: () => {
       window.location.reload();
-    }
+    },
   });
 
   game.settings.register("chatreactions", "show-preview", {
@@ -218,8 +242,8 @@ Hooks.once("init", async () => {
     default: true,
     onChange: () => {
       window.location.reload();
-    }
-  })
+    },
+  });
 
   // Allow the GM to choose which categories to show
   for (const category of categories) {
@@ -235,7 +259,7 @@ Hooks.once("init", async () => {
       },
     });
   }
-  categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
+  categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`));
 
   // The pickers read picmo's emoji database, filled from the data shipped with the module; the suggestions search the
   // data itself
@@ -263,7 +287,9 @@ Hooks.once("init", async () => {
   const directory = game.settings.get("chatreactions", "chat-reactions-directory") as string;
   if (directory !== "") await loadDirectory(directory);
 
-  emojiDatabase.then(() => { picker = createPicker(); });
+  emojiDatabase.then(() => {
+    picker = createPicker();
+  });
 
   const pickerCssRules = {
     "--background-color": `#${pickerColor("picker-background")}`,
@@ -278,7 +304,11 @@ Hooks.once("init", async () => {
   };
   // Two classes outweigh picmo's theme (.picmo__light), whichever style the page got first: picmo adds its own when the
   // first picker is created, after the emoji data is ready
-  $("head").append(`<style class="emoji-picker__styles">.picmo__picker.picmo__picker {${Object.entries(pickerCssRules).map(([key, value]) => `${key}: ${value};`).join("\n")}}</style>`);
+  $("head").append(
+    `<style class="emoji-picker__styles">.picmo__picker.picmo__picker {${Object.entries(pickerCssRules)
+      .map(([key, value]) => `${key}: ${value};`)
+      .join("\n")}}</style>`,
+  );
 });
 
 Hooks.once("ready", () => {
@@ -292,42 +322,48 @@ Hooks.once("ready", () => {
   // Users who cannot browse files cannot load the custom emoji folder or emoji packs: one console warning for all
   // of them, instead of a notification per folder on every load
   if (fileBrowserDenied) {
-    console.warn(game.i18n.format("chatreactions.warnings.noFileBrowser",
-      { permission: game.i18n.localize("PERMISSION.FilesBrowse") }));
+    console.warn(
+      game.i18n.format("chatreactions.warnings.noFileBrowser", {
+        permission: game.i18n.localize("PERMISSION.FilesBrowse"),
+      }),
+    );
   }
 });
 
 function onEmojiInput(selection) {
-    // `selection` object has an `emoji` property
-    // containing the selected emoji
-    if (currentMessage === null) {
-      insertIntoChatInput(selection.hexcode ? selection.emoji : `:${selection.emoji}:`);
+  // `selection` object has an `emoji` property
+  // containing the selected emoji
+  if (currentMessage === null) {
+    insertIntoChatInput(selection.hexcode ? selection.emoji : `:${selection.emoji}:`);
+  } else {
+    //@ts-ignore
+    if (!selection.hexcode) {
+      socketExecute(selection.url, currentMessage);
     } else {
-      //@ts-ignore
-      if (!selection.hexcode) {
-        socketExecute(selection.url, currentMessage);
-      } else {
-        socketExecute(selection.emoji, currentMessage);
-      }
+      socketExecute(selection.emoji, currentMessage);
     }
   }
+}
 
 function createPicker(rootElement: HTMLElement = document.body) {
-  const newPicker = createPopup({
-    rootElement: rootElement,
-    renderer: new LocalTwemojiRenderer(),
-    ...EMOJI_DATA,
-    emojiVersion: 14,
-    custom: customEmojis,
-    categories: categories as any,
-    initialCategory: "recents",
-    maxRecents: game.settings.get("chatreactions", "max-recents") as number,
-    showPreview: game.settings.get("chatreactions", "show-preview") as boolean,
-  }, {
-    showCloseButton: true,
-    onPositionLost: "close",
-    position: rootElement == document.body ? "auto" : "left",
-  });
+  const newPicker = createPopup(
+    {
+      rootElement: rootElement,
+      renderer: new LocalTwemojiRenderer(),
+      ...EMOJI_DATA,
+      emojiVersion: 14,
+      custom: customEmojis,
+      categories: categories as any,
+      initialCategory: "recents",
+      maxRecents: game.settings.get("chatreactions", "max-recents") as number,
+      showPreview: game.settings.get("chatreactions", "show-preview") as boolean,
+    },
+    {
+      showCloseButton: true,
+      onPositionLost: "close",
+      position: rootElement == document.body ? "auto" : "left",
+    },
+  );
   newPicker.addEventListener("emoji:select", onEmojiInput);
   return newPicker;
 }
@@ -348,22 +384,13 @@ function insertIntoChatInput(text: string) {
 
 async function socketExecute(emoji, message) {
   try {
-    await socket.executeAsGM(
-      "handleReaction",
-      emoji,
-      message.id,
-      game.user?.id
-    );
+    await socket.executeAsGM("handleReaction", emoji, message.id, game.user?.id);
   } catch (error) {
     console.log(error);
     if (game.scenes?.["current"] === undefined) {
-      ui.notifications?.warn(
-        "Please make sure a scene is loaded before reacting to messages"
-      );
+      ui.notifications?.warn("Please make sure a scene is loaded before reacting to messages");
     } else {
-      ui.notifications?.warn(
-        "Due to foundry limitations, a GM needs to be online to use chat reactions"
-      );
+      ui.notifications?.warn("Due to foundry limitations, a GM needs to be online to use chat reactions");
     }
   }
 }
@@ -375,7 +402,8 @@ const reactionQueues = new Map<string, Promise<void>>();
 function handleReaction(emoji: string, sentMessageID: string, user: string | undefined) {
   const previous = reactionQueues.get(sentMessageID) ?? Promise.resolve();
   // A failed write is logged on the GM and does not stop the queue
-  const queued = previous.then(() => applyReaction(emoji, sentMessageID, user))
+  const queued = previous
+    .then(() => applyReaction(emoji, sentMessageID, user))
     .catch((error) => console.error("Chat Reactions:", error));
   reactionQueues.set(sentMessageID, queued);
   queued.then(() => {
@@ -406,12 +434,14 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string 
   const sentMessage = game.messages?.get(sentMessageID);
   const reactingUser = game.users?.get(user ?? "");
   if (!sentMessage || !reactingUser) throw new Error(`No message ${sentMessageID} or user ${user}`);
-  if (!canSeeMessage(sentMessage, reactingUser)) throw new Error(`${reactingUser.name} cannot see message ${sentMessageID}`);
+  if (!canSeeMessage(sentMessage, reactingUser))
+    throw new Error(`${reactingUser.name} cannot see message ${sentMessageID}`);
   user = reactingUser.id as string;
 
   // Get Current State of Emojis if it exists
   const currentEmojiState = readReactions(sentMessage);
-  if (!isValidReaction(emoji, currentEmojiState, user)) throw new Error(`Not a reaction: ${String(emoji).slice(0, 40)}`);
+  if (!isValidReaction(emoji, currentEmojiState, user))
+    throw new Error(`Not a reaction: ${String(emoji).slice(0, 40)}`);
 
   // When each user reacted, kept beside the reactions (GM clock)
   const reactedAt = readReactedAt(sentMessage);
@@ -419,9 +449,7 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string 
   // Reaction Logic
   if (currentEmojiState[emoji]) {
     if (currentEmojiState[emoji].includes(user)) {
-      currentEmojiState[emoji] = currentEmojiState[
-        emoji
-      ].filter(function (value) {
+      currentEmojiState[emoji] = currentEmojiState[emoji].filter(function (value) {
         return value != user;
       });
       if (currentEmojiState[emoji].length === 0) {
@@ -450,18 +478,16 @@ async function loadDirectory(directory: string) {
   const dir = utils.parseDirectory(directory);
   // v13+ FilePicker is an ApplicationV2 in foundry.applications.apps; v12 has the global one
   const Picker = (foundry as any).applications?.apps?.FilePicker?.implementation ?? FilePicker;
-  await Picker.browse(
-    dir.activeSource,
-    dir.current,
-    {
-      bucket: dir.bucket,
-    }
-  ).then((fileList) => {
-    // Load all the custom emojis from emoji packs
-    addToCustomEmojiList(fileList, customEmojis);
-  }).catch(() => {
-    fileBrowserDenied = true; // reported once, in the console, when ready
-  });
+  await Picker.browse(dir.activeSource, dir.current, {
+    bucket: dir.bucket,
+  })
+    .then((fileList) => {
+      // Load all the custom emojis from emoji packs
+      addToCustomEmojiList(fileList, customEmojis);
+    })
+    .catch(() => {
+      fileBrowserDenied = true; // reported once, in the console, when ready
+    });
 }
 
 // Get all emoji image files from the directory and add them to the picker. Names come from the file names, with only
@@ -481,7 +507,8 @@ function reactionImage(key: string): string | undefined {
 }
 
 function togglePicker(referenceEl: HTMLElement) {
-  if (!picker) { // the emoji database is still being filled
+  if (!picker) {
+    // the emoji database is still being filled
     emojiDatabase.then(() => togglePicker(referenceEl));
     return;
   }
@@ -494,12 +521,15 @@ function togglePicker(referenceEl: HTMLElement) {
     picker.toggle({
       triggerElement: referenceEl,
       referenceElement: referenceEl,
-    })
+    });
 }
 
 Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
-  if (node.querySelector("#chat-message")) { // Chat window has been popped out into a new window
-    emojiDatabase.then(() => { popoutPicker = createPicker(node); });
+  if (node.querySelector("#chat-message")) {
+    // Chat window has been popped out into a new window
+    emojiDatabase.then(() => {
+      popoutPicker = createPicker(node);
+    });
     // Clone sprite sheet to new window so emojis won't be invisible
     if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
     const spriteSheet = document.getElementById("picmo-twemoji-sprites") as HTMLElement;
@@ -598,7 +628,8 @@ Hooks.once("init", () => {
 function renderMessage(message, element: HTMLElement) {
   hideReactionCard(message.id); // its pill is being replaced
 
-  const messagingElement = element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
+  const messagingElement =
+    element.querySelector<HTMLElement>(".flavor-text") ?? element.querySelector<HTMLElement>(".message-content");
   if (!messagingElement) return;
 
   // Unicode emojis and known custom emoji codes in the text become images; the message's own markup stays as it is
@@ -627,7 +658,8 @@ function renderMessage(message, element: HTMLElement) {
     const ButtonContent = document.createElement("div");
     const EmojiReactions = document.createElement("p");
     EmojiReactions.textContent = formatCount(voters.length);
-    if (image) { // Custom emoji
+    if (image) {
+      // Custom emoji
       const EmojiImage = document.createElement("img");
       EmojiImage.className = "emoji-image";
       EmojiImage.src = image;
@@ -653,10 +685,7 @@ function renderMessage(message, element: HTMLElement) {
     attachReactionCard(button, message, key, voters);
     button.addEventListener("click", function () {
       //@ts-ignore
-      socketExecute(
-        key,
-        message
-      );
+      socketExecute(key, message);
     });
     emojiRack.appendChild(button);
   }
@@ -668,7 +697,7 @@ function renderMessage(message, element: HTMLElement) {
     compactButton.innerHTML = "<i class='fas fa-smile'></i>";
     element.querySelector(".message-metadata")?.appendChild(compactButton);
 
-    compactButton.addEventListener("click", function() {
+    compactButton.addEventListener("click", function () {
       togglePicker(compactButton);
       currentMessage = message;
     });
@@ -681,7 +710,7 @@ function renderMessage(message, element: HTMLElement) {
     p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
     p.className += "emoji-button trigger";
 
-    p.addEventListener("click", function() {
+    p.addEventListener("click", function () {
       togglePicker(p);
       currentMessage = message;
     });

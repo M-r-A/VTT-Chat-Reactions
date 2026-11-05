@@ -45,13 +45,19 @@ export function sortReactions(state: Record<string, string[]>, reactedAt: Reacte
     return 0;
   };
   // Infinity minus Infinity is NaN, which || skips like 0
-  return Object.entries(state).sort(([a, votersA], [b, votersB]) =>
-    votersB.length - votersA.length || firstReaction(a) - firstReaction(b) || byCodePoints(a, b));
+  return Object.entries(state).sort(
+    ([a, votersA], [b, votersB]) =>
+      votersB.length - votersA.length || firstReaction(a) - firstReaction(b) || byCodePoints(a, b),
+  );
 }
 
 /** A reaction count as shown in its pill: 999, 1K, 1.1K, …, 10K, 1M. Rounded down, so it never overstates. */
 export function formatCount(count: number): string {
-  const units: [number, string][] = [[1e9, "B"], [1e6, "M"], [1e3, "K"]];
+  const units: [number, string][] = [
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "K"],
+  ];
   for (const [size, suffix] of units) {
     if (count < size) continue;
     const value = Math.floor((count / size) * 10) / 10;
@@ -66,13 +72,14 @@ export function formatReactionTime(time: number, now = new Date()): string {
   const date = new Date(time);
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const daysAgo = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
-  const day = daysAgo === 0 || daysAgo === 1
-    ? new Intl.RelativeTimeFormat(lang, { numeric: "auto" }).format(-daysAgo, "day")
-    : date.toLocaleDateString(lang, {
-      day: "numeric",
-      month: "short",
-      year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
-    });
+  const day =
+    daysAgo === 0 || daysAgo === 1
+      ? new Intl.RelativeTimeFormat(lang, { numeric: "auto" }).format(-daysAgo, "day")
+      : date.toLocaleDateString(lang, {
+          day: "numeric",
+          month: "short",
+          year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
+        });
   // The locale's own short time: "08:44" in Russian, "8:44 AM" in English
   const clock = date.toLocaleTimeString(lang, { timeStyle: "short" } as Intl.DateTimeFormatOptions);
   return game.i18n.format("chatreactions.card.dayAtTime", { day, time: clock });
@@ -117,7 +124,8 @@ export function attachReactionCard(button: HTMLElement, message, emoji: string, 
     if (ev.pointerType === "touch") return;
     window.clearTimeout(hideTimer);
     window.clearTimeout(showTimer);
-    if (card?.isConnected) show(); // already open for another pill
+    if (card?.isConnected)
+      show(); // already open for another pill
     else showTimer = window.setTimeout(show, tooltipDelay());
   });
   button.addEventListener("pointerleave", () => {
@@ -240,7 +248,8 @@ function cardRow(doc: Document, userId: string, emoji: string, time: number | un
 }
 
 function emojiIcon(doc: Document, emoji: string): Element {
-  if (emoji.includes("/")) { // custom emoji: its key is the image path
+  if (emoji.includes("/")) {
+    // custom emoji: its key is the image path
     const img = doc.createElement("img");
     img.className = "emoji-image";
     img.src = emoji;

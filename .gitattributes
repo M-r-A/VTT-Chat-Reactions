@@ -1,0 +1,4 @@
+# LF in every checkout, whatever core.autocrlf says: Prettier checks for LF, also on Windows
+* text=auto eol=lf
+*.png binary
+*.gif binary

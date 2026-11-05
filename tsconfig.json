@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "es2018",
     "module": "esnext",
-    "lib": [ "esnext", "dom", "dom.iterable" ],
-    "types": [ "fvtt-types" ],
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["fvtt-types"],
     "moduleResolution": "bundler",
     "sourceMap": true,
     "strict": true,
@@ -26,5 +26,5 @@
 
     "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
   },
-  "exclude": [ "node_modules", "webpack.config.js", "foundry.js", "dist" ]
+  "exclude": ["node_modules", "webpack.config.js", "foundry.js", "dist"]
 }

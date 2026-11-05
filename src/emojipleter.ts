@@ -19,18 +19,19 @@ function identifierOf(e: EmojiRecord) {
 /** Icon and label of a suggestion. */
 function labelOf(e: EmojiRecord): DocumentFragment {
   const label = document.createDocumentFragment();
-  if (e.url) { // custom emoji
-    const img = document.createElement('img');
+  if (e.url) {
+    // custom emoji
+    const img = document.createElement("img");
     img.src = e.url;
-    img.classList.add('emoji');
+    img.classList.add("emoji");
     img.draggable = false;
     label.appendChild(img);
   } else {
-    const svg = document.createElement('span');
-    svg.innerHTML = `<svg class="emoji"><use xlink:href="#${toCodePoints(e.emoji).join('-')}"></use></svg>`;
+    const svg = document.createElement("span");
+    svg.innerHTML = `<svg class="emoji"><use xlink:href="#${toCodePoints(e.emoji).join("-")}"></use></svg>`;
     label.appendChild(svg.firstElementChild as Element);
   }
-  label.append(e.label.replace(/ /g, '-'));
+  label.append(e.label.replace(/ /g, "-"));
   return label;
 }
 
@@ -41,7 +42,7 @@ interface SearchEntry {
 }
 
 function searchEntry(emoji: EmojiRecord): SearchEntry {
-  return { emoji, terms: [emoji.label, ...(emoji.tags ?? [])].map(term => term.toLowerCase()) };
+  return { emoji, terms: [emoji.label, ...(emoji.tags ?? [])].map((term) => term.toLowerCase()) };
 }
 
 // The shipped emoji data, in the order of picmo's database (by the emoji's code units), which the suggestions came in
@@ -50,7 +51,7 @@ let unicodeEntries: SearchEntry[] | undefined;
 function unicodeEmojis(): SearchEntry[] {
   unicodeEntries ??= (EMOJI_DATA.emojiData as EmojiRecord[])
     .slice()
-    .sort((a, b) => a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0)
+    .sort((a, b) => (a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0))
     .map(searchEntry);
   return unicodeEntries;
 }
@@ -63,7 +64,7 @@ function unicodeEmojis(): SearchEntry[] {
 abstract class EmojiSearch {
   private readonly _customEmojis: CustomEmoji[];
   private readonly _maxResults;
-  protected _word = '';
+  protected _word = "";
 
   constructor(customEmojis: CustomEmoji[], maxResults) {
     this._customEmojis = customEmojis;
@@ -72,16 +73,17 @@ abstract class EmojiSearch {
 
   /** Suggestions for a `:query`: emojis whose label or a tag contains it, `-` standing for a space. */
   _filter(word: string): EmojiRecord[] {
-    const query = word.substring(1).replace(/-/g, ' ').toLowerCase();
+    const query = word.substring(1).replace(/-/g, " ").toLowerCase();
     const results: EmojiRecord[] = [];
     // Custom emojis can change at any time (uploads, settings), so they are matched as they are
     for (const emoji of this._customEmojis) {
       if (results.length >= this._maxResults) return results;
-      if (searchEntry(emoji as EmojiRecord).terms.some(term => term.includes(query))) results.push(emoji as EmojiRecord);
+      if (searchEntry(emoji as EmojiRecord).terms.some((term) => term.includes(query)))
+        results.push(emoji as EmojiRecord);
     }
     for (const { emoji, terms } of unicodeEmojis()) {
       if (results.length >= this._maxResults) break;
-      if (terms.some(term => term.includes(query))) results.push(emoji);
+      if (terms.some((term) => term.includes(query))) results.push(emoji);
     }
     return results;
   }
@@ -108,7 +110,7 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
     super(customEmojis, maxResults);
     const { Autocomplete } = (foundry as any).applications.ux;
     this._autocomplete = new Autocomplete.implementation({
-      onSelect: (identifier, label, { prefix }) => this.select(identifier, label, prefix)
+      onSelect: (identifier, label, { prefix }) => this.select(identifier, label, prefix),
     });
   }
 
@@ -122,7 +124,7 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
     const preText = $cursor ? $cursor.parent.textBetween(0, $cursor.parentOffset, undefined, "￼") : "";
     const word = queryBefore(preText);
     if (!word) {
-      this._word = '';
+      this._word = "";
       this.close();
       return;
     }
@@ -138,7 +140,11 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
 
     const target = this._view?.dom as HTMLElement | undefined;
     if (!target) return;
-    this._autocomplete.activate(target, list.map(e => ({ identifier: identifierOf(e), label: labelOf(e) })), { prefix: word });
+    this._autocomplete.activate(
+      target,
+      list.map((e) => ({ identifier: identifierOf(e), label: labelOf(e) })),
+      { prefix: word },
+    );
     this._autocomplete.select(); // preselect the first entry, as the old popup did
 
     // The chat input sits at the bottom of the screen, so open the menu upwards
@@ -155,7 +161,7 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
 
   select(identifier: string, label: string, prefix: string) {
     const view = this._view;
-    if (!view || !Hooks.call('emojuleSelectEmoji', label, view.dom)) return;
+    if (!view || !Hooks.call("emojuleSelectEmoji", label, view.dom)) return;
 
     // Replace the typed `:query` before the cursor with the chosen emoji
     const { state } = view;
@@ -165,7 +171,7 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
     if (!preText.endsWith(prefix)) return;
     view.dispatch(state.tr.insertText(identifier, $cursor.pos - prefix.length, $cursor.pos));
     view.focus();
-    this._word = '';
+    this._word = "";
   }
 }
 
@@ -181,12 +187,12 @@ export class TextareaEmojiPleter extends EmojiSearch {
 
   constructor(customEmojis: CustomEmoji[], maxResults) {
     super(customEmojis, maxResults);
-    window.addEventListener('input', (ev) => this._onInput(ev), true);
-    window.addEventListener('keydown', (ev) => this._onKeyDown(ev), true);
+    window.addEventListener("input", (ev) => this._onInput(ev), true);
+    window.addEventListener("keydown", (ev) => this._onKeyDown(ev), true);
   }
 
   _isChatInput(target): target is HTMLTextAreaElement {
-    return target instanceof HTMLTextAreaElement && target.id === 'chat-message';
+    return target instanceof HTMLTextAreaElement && target.id === "chat-message";
   }
 
   _onInput(ev: Event) {
@@ -194,7 +200,7 @@ export class TextareaEmojiPleter extends EmojiSearch {
     this._element = ev.target;
     const word = queryBefore(this._element.value.substring(0, this._element.selectionStart));
     if (!word) {
-      this._word = '';
+      this._word = "";
       this.close();
       return;
     }
@@ -206,17 +212,17 @@ export class TextareaEmojiPleter extends EmojiSearch {
   _onKeyDown(ev: KeyboardEvent) {
     if (!this._html || ev.target !== this._element || ev.isComposing) return;
     switch (ev.key) {
-      case 'Enter':
-      case 'Tab':
+      case "Enter":
+      case "Tab":
         if (this._selected) this.select(this._selected);
         break;
-      case 'Escape':
+      case "Escape":
         this.close();
         break;
-      case 'ArrowUp': // the list grows upwards from the input
+      case "ArrowUp": // the list grows upwards from the input
         this._highlight(this._selected?.nextElementSibling as HTMLElement | null);
         break;
-      case 'ArrowDown':
+      case "ArrowDown":
         this._highlight(this._selected?.previousElementSibling as HTMLElement | null);
         break;
       default:
@@ -228,8 +234,8 @@ export class TextareaEmojiPleter extends EmojiSearch {
 
   _highlight(li: HTMLElement | null | undefined) {
     if (!li) return;
-    this._selected?.classList.remove('selected');
-    li.classList.add('selected');
+    this._selected?.classList.remove("selected");
+    li.classList.add("selected");
     this._selected = li;
   }
 
@@ -238,13 +244,13 @@ export class TextareaEmojiPleter extends EmojiSearch {
     if (!list) return; // a newer search was started
     if (list.length === 0) return this.close();
 
-    const ul = document.createElement('ul');
-    ul.classList.add('emojipleter-emojilist');
+    const ul = document.createElement("ul");
+    ul.classList.add("emojipleter-emojilist");
     for (const e of list) {
-      const li = ul.appendChild(document.createElement('li'));
-      li.classList.add('emojipleter-emoji');
+      const li = ul.appendChild(document.createElement("li"));
+      li.classList.add("emojipleter-emoji");
       li.dataset.identifier = identifierOf(e);
-      li.dataset.label = e.label.replace(/ /g, '-');
+      li.dataset.label = e.label.replace(/ /g, "-");
       li.appendChild(labelOf(e));
     }
     this._show(ul);
@@ -253,16 +259,16 @@ export class TextareaEmojiPleter extends EmojiSearch {
 
   _show(list: HTMLUListElement) {
     if (!this._html) {
-      this._html = document.createElement('div');
-      this._html.id = 'emojipleter';
+      this._html = document.createElement("div");
+      this._html.id = "emojipleter";
       // Keep the focus in the input while clicking a suggestion
-      this._html.addEventListener('mousedown', ev => ev.preventDefault());
-      this._html.addEventListener('click', ev => {
-        const li = (ev.target as Element | null)?.closest<HTMLElement>('.emojipleter-emoji');
+      this._html.addEventListener("mousedown", (ev) => ev.preventDefault());
+      this._html.addEventListener("click", (ev) => {
+        const li = (ev.target as Element | null)?.closest<HTMLElement>(".emojipleter-emoji");
         if (li) this.select(li);
       });
-      this._html.addEventListener('mousemove', ev => {
-        this._highlight((ev.target as Element | null)?.closest<HTMLElement>('.emojipleter-emoji'));
+      this._html.addEventListener("mousemove", (ev) => {
+        this._highlight((ev.target as Element | null)?.closest<HTMLElement>(".emojipleter-emoji"));
       });
       document.body.appendChild(this._html);
     }
@@ -285,15 +291,15 @@ export class TextareaEmojiPleter extends EmojiSearch {
   select(li: HTMLElement) {
     const element = this._element;
     const { identifier, label } = li.dataset;
-    if (!element || !identifier || !Hooks.call('emojuleSelectEmoji', label, element)) return;
+    if (!element || !identifier || !Hooks.call("emojuleSelectEmoji", label, element)) return;
 
     // Replace the typed `:query` before the cursor with the chosen emoji
     const end = element.selectionStart;
     const word = queryBefore(element.value.substring(0, end));
     if (!word) return this.close();
-    element.setRangeText(identifier, end - word.length, end, 'end');
+    element.setRangeText(identifier, end - word.length, end, "end");
     element.focus();
-    this._word = '';
+    this._word = "";
     this.close();
   }
 }

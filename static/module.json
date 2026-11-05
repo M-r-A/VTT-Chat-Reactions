@@ -42,12 +42,8 @@
       }
     ]
   },
-  "esmodules": [
-    "chatreactions.js"
-  ],
-  "styles": [
-    "/styles/module.css"
-  ],
+  "esmodules": ["chatreactions.js"],
+  "styles": ["/styles/module.css"],
   "languages": [
     {
       "lang": "en",

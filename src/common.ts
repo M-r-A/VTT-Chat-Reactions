@@ -2,7 +2,7 @@ const vs16RegExp = /\uFE0F/g;
 // avoid using a string literal like '\u200D' here because minifiers expand it inline
 const zeroWidthJoiner = String.fromCharCode(0x200d);
 
-const removeVS16s = rawEmoji => (rawEmoji.indexOf(zeroWidthJoiner) < 0 ? rawEmoji.replace(vs16RegExp, '') : rawEmoji);
+const removeVS16s = (rawEmoji) => (rawEmoji.indexOf(zeroWidthJoiner) < 0 ? rawEmoji.replace(vs16RegExp, "") : rawEmoji);
 
 export function toCodePoints(unicodeSurrogates: string): Array<string> {
   unicodeSurrogates = removeVS16s(unicodeSurrogates);

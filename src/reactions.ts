@@ -39,8 +39,13 @@ export function isUnicodeEmoji(key: unknown): key is string {
  * custom emoji folder or of emoji pack modules.
  */
 export function isLocalImagePath(key: unknown): key is string {
-  return typeof key === "string" && key.length <= MAX_REACTION_LENGTH
-    && !/^[a-z][a-z0-9+.-]*:/i.test(key) && !key.startsWith("//") && !key.startsWith("\\")
-    && !/["'<>\s\\]/.test(key)
-    && /\.(png|gif|webp|jpe?g|avif|svg)$/i.test(key);
+  return (
+    typeof key === "string" &&
+    key.length <= MAX_REACTION_LENGTH &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(key) &&
+    !key.startsWith("//") &&
+    !key.startsWith("\\") &&
+    !/["'<>\s\\]/.test(key) &&
+    /\.(png|gif|webp|jpe?g|avif|svg)$/i.test(key)
+  );
 }
