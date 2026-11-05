@@ -156,6 +156,9 @@ To rebuild `dist/` on every change run the command: npm run watch, with `dist/` 
 Release:
 To ready the project for release run the command: npm run build:production
 
+Formatting:
+Every build, local and in CI, first checks the formatting with Prettier and stops if a file is off. Run npm run format to fix it.
+
 # Credits:
 BadIdeasBureau, MrPrimate, Calego, Stäbchenfisch, Zeel, Arcanist, LukeAbby, Animu36 and many more from the League of Extraordinary FoundryVTT Developers for all the help and advice   
 Moerill for most of the emoji completion suggestion code: https://github.com/Moerill/Emojule  

@@ -4,9 +4,11 @@
   "description": "Twemoji chat reactions and custom emojis for Foundry VTT.",
   "private": true,
   "scripts": {
-    "build": "webpack",
-    "build:production": "webpack --mode production --env mode=production",
-    "watch": "webpack --watch"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "npm run format:check && webpack",
+    "build:production": "npm run format:check && webpack --mode production --env mode=production",
+    "watch": "npm run format:check && webpack --watch"
   },
   "repository": {
     "type": "git",
