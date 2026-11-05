@@ -7,7 +7,7 @@ const removeVS16s = rawEmoji => (rawEmoji.indexOf(zeroWidthJoiner) < 0 ? rawEmoj
 export function toCodePoints(unicodeSurrogates: string): Array<string> {
   unicodeSurrogates = removeVS16s(unicodeSurrogates);
   const points = [];
-  let char = 0;
+  let char: number;
   let previous = 0;
   let i = 0;
   while (i < unicodeSurrogates.length) {

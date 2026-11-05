@@ -151,7 +151,7 @@ All emoji data unless being displayed are actively stored as unicode or in the c
 
 # Development Commands:
 Development: 
-To run with hotswap enabled run the command: npm run start
+To rebuild `dist/` on every change run the command: npm run watch, with `dist/` linked into the modules folder of a local Foundry; reload Foundry to pick up the changes
 
 Release:
 To ready the project for release run the command: npm run build:production
