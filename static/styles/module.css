@@ -79,7 +79,7 @@
 }
 
 #chatOptions {
-  display:flex;
+  display: flex;
   flex-direction: column;
   top: 10px;
   left: 5px;
@@ -113,14 +113,16 @@
   max-height: 0; /* Make player view consistent with GM view */
 }
 
-img.emoji, svg.emoji {
+img.emoji,
+svg.emoji {
   height: 1.2em;
   width: 1.2em;
   border: none;
-  vertical-align: -.1em;
+  vertical-align: -0.1em;
 }
-img.emoji.emoji-large, svg.emoji.emoji-large {
-  height:2.4em;
+img.emoji.emoji-large,
+svg.emoji.emoji-large {
+  height: 2.4em;
   width: 2.4em;
 }
 
@@ -132,7 +134,8 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
   z-index: 1000; /* So it appears above popped-out chat logs */
 }
 
-.picmo__picker { /* Make more compact */
+.picmo__picker {
+  /* Make more compact */
   gap: 2px;
 }
 
@@ -142,7 +145,7 @@ img.emoji.emoji-large, svg.emoji.emoji-large {
 }
 
 .picmo__picker .emojiCategory .categoryName {
-  font-family: 'Signika', sans-serif;
+  font-family: "Signika", sans-serif;
 }
 
 /* Emoji buttons look the same on every core: v13+ gives buttons a 64px min-height, which stretched the hover

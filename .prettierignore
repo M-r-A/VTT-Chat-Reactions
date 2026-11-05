@@ -1,0 +1,5 @@
+dist/
+package-lock.json
+# Markdown keeps its hand formatting: Prettier turns the README's hard line breaks (two trailing spaces) into
+# paragraph breaks, which changes how GitHub renders it
+*.md
