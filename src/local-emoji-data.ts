@@ -8,7 +8,7 @@ import messages from "emojibase-data/en/messages.json";
 
 export const EMOJI_DATA = { emojiData: emojiData as any, messages: messages as any };
 
-/** Fill picmo's emoji database from the shipped data, for the picker and the :emoji: suggestions alike. */
+/** Fill picmo's emoji database from the shipped data, which the pickers read. */
 export function prepareEmojiDatabase(): Promise<void> {
   return createDatabase("en", IndexedDbStoreFactory, EMOJI_DATA.messages, EMOJI_DATA.emojiData);
 }

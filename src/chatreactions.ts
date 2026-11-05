@@ -237,7 +237,8 @@ Hooks.once("init", async () => {
   }
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`))
 
-  // The picker and the suggestions share picmo's emoji database, filled from the data shipped with the module
+  // The pickers read picmo's emoji database, filled from the data shipped with the module; the suggestions search the
+  // data itself
   emojiDatabase = prepareEmojiDatabase().catch((error) => console.error("Chat Reactions: emoji data", error));
   if (game.settings.get("chatreactions", "emojipleter"))
     emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
