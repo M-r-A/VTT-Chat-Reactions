@@ -98,10 +98,11 @@
   color: inherit;
 }
 
-/* The pill fits its content, so the count sits at the same distance from the emoji whatever its digits */
+/* The pill fits its content, so the count sits at the same distance from the emoji whatever its digits. Pills and
+   the plus have the corners of the Token Controls buttons: 4px in v13+, 5px in v12. */
 .emoji-button {
   color: white;
-  border-radius: 10px;
+  border-radius: 4px;
   height: 2rem;
   width: auto;
   flex: 0 0 auto;
@@ -110,6 +111,10 @@
   font-size: 0.85rem;
   margin-right: 5px;
 }
+.chat-reactions-v12 .emoji-button {
+  border-radius: 5px;
+}
+
 #chatOptions {
   display: flex;
   flex-direction: column;
@@ -166,12 +171,18 @@ img.emoji.emoji-large {
   filter: invert(100%);
 }
 
-.reaction {
+/* The pills keep their colors whatever the system styles its buttons with. v12 has no cascade layers, and a system
+   may style the sidebar's buttons by id (Cyberpunk RED: #ui-right button), which outranked these classes: :not() of an
+   id no element has adds an id's weight and still matches every pill. v13+ put system styles in a lower layer. */
+.chat-reactions-rack .emoji-button:not(#chat-reactions) {
+  color: white;
+}
+.chat-reactions-rack .reaction:not(#chat-reactions) {
   background: rgba(0, 0, 0, 0.6);
 }
 
 /* The viewer's own reaction is filled with the accent color, as in Telegram */
-.emoji-active {
+.chat-reactions-rack .emoji-active:not(#chat-reactions) {
   background: rgba(150, 40, 30, 0.9);
   font-weight: bold;
   border: 1px solid rgba(255, 120, 100, 0.9);
@@ -190,6 +201,7 @@ img.emoji.emoji-large {
 
 .emoji-button-content p {
   margin: 0;
+  font-weight: bold;
 }
 
 .emoji-image {
@@ -225,12 +237,16 @@ img.emoji.emoji-large {
   padding: 0;
   background-color: transparent;
   border: none;
-  width: 30px;
-  border-radius: 100%;
-  height: 30px;
+  width: 2rem;
+  height: 2rem;
   line-height: 1;
   color: inherit;
   font-size: 1rem;
+}
+.chat-reactions-rack .trigger:not(#chat-reactions) {
+  background-color: transparent;
+  border: none;
+  color: inherit;
 }
 /* v12 gives every button icon a right margin, which pushed the plus off center */
 .trigger > i {

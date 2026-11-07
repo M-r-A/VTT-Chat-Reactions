@@ -595,6 +595,8 @@ function renderMessage(message, element: HTMLElement) {
   // Add All the reactions and render them accordingly as if the current user reacted or not
   const emojiRack = document.createElement("div");
   emojiRack.className = "chat-reactions-rack";
+  // v12 draws its controls with other corners than v13+ (styles/module.css)
+  if (coreGeneration() < 13) emojiRack.classList.add("chat-reactions-v12");
   for (const [key, value] of sortReactions(currentEmojiState, readReactedAt(message))) {
     const image = key.includes("/") ? reactionImage(key) : undefined;
     if (!image && !isUnicodeEmoji(key)) continue;
