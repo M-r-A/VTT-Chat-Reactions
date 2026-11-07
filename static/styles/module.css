@@ -115,20 +115,8 @@
   border-radius: 5px;
 }
 
-#chatOptions {
-  display: flex;
-  flex-direction: column;
-  top: 10px;
-  left: 5px;
-  position: absolute;
-}
-
 #chat-controls .chat-reactions-picker .twemoji {
   font-size: 1.25em;
-}
-
-#chat-controls {
-  position: relative;
 }
 
 .chat-sidebar #chat-controls .roll-type-select {
