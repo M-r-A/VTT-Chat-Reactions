@@ -9,6 +9,11 @@ An image is worth a thousand words, therefore a animated parrot gif must be wort
  - Adds Emoji Picker next to text  area for easy use of emojis in chat
  - Adds Twemoji and Custom emojis to chat
  - Suggests emoji completions when typing a colon `:` in chat
+ - Shows who reacted, and when, on each reaction
+
+The picker has a search tab with your frequently used emojis, a tab per category, a tab for custom emojis, and a
+skin tone chooser; it works with the keyboard. It follows the look and theme of Foundry 12, 13 and 14, and every emoji
+is drawn with the Twemoji font the module ships, so all players see the same emoji. It works with any game system.
 
 # Installing this fork
 This is a maintained fork of [YourFavouriteOreo/VTT-Chat-Reactions](https://github.com/YourFavouriteOreo/VTT-Chat-Reactions). It keeps the module id `chatreactions`, so existing reactions and settings carry over.
@@ -68,14 +73,7 @@ The module then proceeds to check these folders for all their emoji files and ad
 
 If the emoji directory is defined , the module then goes through the emoji directory and loads the images as custom emojis using the file name as the name and path for the emoji data type.
 
-The picker is then created and all the customEmojis are loaded into the picker via the constructor and all the awesome emojis are loaded. All further functionality is handled when the picker selects an emoji
-
-```
-  picker = new EmojiButton({
-    style: "twemoji",
-    custom: customEmojis,
-  }) as EmojiButton;
-```
+The picker is then configured with the custom emojis, the categories and the colors from the settings (`configurePicker` in `src/picker.ts`). It reads the emoji data the module ships (`data/emoji.json`) into an emoji-picker-element database in the browser, and opens next to the button that was clicked. All further functionality is handled when the picker selects an emoji
 
 
 ### Example of Emoji Data Load
@@ -162,8 +160,8 @@ Every build, local and in CI, first checks the formatting with Prettier and stop
 # Credits:
 BadIdeasBureau, MrPrimate, Calego, Stäbchenfisch, Zeel, Arcanist, LukeAbby, Animu36 and many more from the League of Extraordinary FoundryVTT Developers for all the help and advice   
 Moerill for most of the emoji completion suggestion code: https://github.com/Moerill/Emojule  
-Picmo by JoeAttardi for Picker Functionality: https://github.com/joeattardi/picmo  
-Emoji graphics from Twemoji, Copyright 2019 Twitter, Inc and other contributors, licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/): https://github.com/jdecked/twemoji  
+emoji-picker-element by Nolan Lawson for the emoji database behind the picker, and emoji-picker-element-data for the emoji data: https://github.com/nolanlawson/emoji-picker-element  
+Emoji graphics from Twemoji, Copyright 2019 Twitter, Inc and other contributors, licensed under CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/): https://github.com/jdecked/twemoji, as a font by SableClient: https://github.com/SableClient/twemoji-font  
 Emoji data from Emojibase by Miles Johnson: https://emojibase.dev  
 The licenses of all bundled packages ship with the module in `THIRD-PARTY-NOTICES.txt`.  
 Used webpack and setup files as reference: https://github.com/anvil-vtt/FateX   
