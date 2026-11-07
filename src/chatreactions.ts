@@ -204,35 +204,36 @@ Hooks.once("init", async () => {
 
   registerPickerColor(
     "picker-background",
-    "Background color for the picker",
-    "Background color that will appear behind the emoji picker",
+    utils.localize("settings.pickerBackground.name"),
+    utils.localize("settings.pickerBackground.hint"),
   );
   registerPickerColor(
     "picker-font-color",
-    "Font color for the picker",
-    "Color used in the text for the emoji picker. This color will be contrasted for headers",
+    utils.localize("settings.pickerText.name"),
+    utils.localize("settings.pickerText.hint"),
   );
   registerPickerColor(
     "category-active-icon-color",
-    "Font color for the active icon/category",
-    "Color for the active icon/category. This color will be contrasted for inactive",
+    utils.localize("settings.pickerAccent.name"),
+    utils.localize("settings.pickerAccent.hint"),
   );
 
   game.settings.register("chatreactions", "max-recents", {
-    name: "Max recent emojis",
-    hint: "Max number of recent emojis to store.",
+    name: utils.localize("settings.frequentCount.name"),
+    hint: utils.localize("settings.frequentCount.hint"),
     scope: "client",
     config: true,
     type: Number,
-    default: 50,
+    range: { min: 0, max: 16, step: 1 },
+    default: 16,
     onChange: () => {
       window.location.reload();
     },
   });
 
   game.settings.register("chatreactions", "show-preview", {
-    name: "Show preview",
-    hint: "Show a preview of the emoji when hovering over it in the picker.",
+    name: utils.localize("settings.showPreview.name"),
+    hint: utils.localize("settings.showPreview.hint"),
     scope: "client",
     config: true,
     type: Boolean,
@@ -244,9 +245,10 @@ Hooks.once("init", async () => {
 
   // Allow the GM to choose which categories to show
   for (const category of categories) {
+    const label = { category: utils.localize(`settings.categories.${category}`) };
     game.settings.register("chatreactions", `show-category-${category}`, {
-      name: `Show Category: ${category}`,
-      hint: `Show emojis of the ${category} category in the emoji picker.`,
+      name: game.i18n.format("chatreactions.settings.showCategory.name", label),
+      hint: game.i18n.format("chatreactions.settings.showCategory.hint", label),
       scope: "client",
       config: true,
       type: Boolean,
