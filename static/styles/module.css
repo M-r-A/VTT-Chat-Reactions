@@ -143,6 +143,18 @@
   justify-content: flex-end;
 }
 
+/* A popped-out message: core's window header (z-index 1) lies over the message's first row and took the clicks of
+   the react button there. The row is raised, not the button: v12 moves it with a transform, which would keep the
+   button below the header. The row reaches under the header's close button, so only its own controls take clicks. */
+.chat-popout .message-metadata {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.chat-popout .message-metadata > * {
+  pointer-events: auto;
+}
+
 /* Make compact emoji button clickable when in DF Chat Enhancements merged message. Only there: on every message it
    collapsed the header icons and took the clicks of the delete button (#27). */
 .chat-message:is(.dfce-cm-middle, .dfce-cm-bottom) .message-metadata {
