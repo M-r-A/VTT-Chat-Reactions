@@ -1,4 +1,4 @@
-import { parse } from "@twemoji/parser";
+import { emojiRanges } from "./emoji-match";
 import { twemoji } from "./twemoji";
 
 // Custom emoji codes, as chat messages hold them: :name:
@@ -44,9 +44,8 @@ function replaceInText(node: Text, customEmojiUrl: (name: string) => string | un
   const doc = node.ownerDocument;
   const pieces: Piece[] = [];
 
-  for (const entity of parse(text)) {
-    const [start, end] = entity.indices;
-    pieces.push({ start, end, element: twemoji(doc, entity.text, "emoji") });
+  for (const { start, end, text: emoji } of emojiRanges(text)) {
+    pieces.push({ start, end, element: twemoji(doc, emoji, "emoji") });
   }
   CUSTOM_CODE.lastIndex = 0;
   for (let match = CUSTOM_CODE.exec(text); match; match = CUSTOM_CODE.exec(text)) {
