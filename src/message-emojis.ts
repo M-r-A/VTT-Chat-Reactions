@@ -1,8 +1,6 @@
-import { parse } from "twemoji-parser";
-import { toCodePoints } from "./common";
+import { parse } from "@twemoji/parser";
+import { twemoji } from "./twemoji";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const XLINK_NS = "http://www.w3.org/1999/xlink";
 // Custom emoji codes, as chat messages hold them: :name:
 const CUSTOM_CODE = /:([A-Za-z0-9_]+):/g;
 // Text in these elements stays as typed
@@ -11,7 +9,8 @@ const SKIPPED = new Set(["CODE", "PRE", "SCRIPT", "STYLE", "TEXTAREA"]);
 type Piece = { start: number; end: number; element: Element };
 
 /**
- * Show emojis in the text of a message: unicode emojis as twemoji, known custom emoji codes (:name:) as their images.
+ * Show emojis in the text of a message: unicode emojis in the Twemoji font, known custom emoji codes (:name:) as their
+ * images.
  * Only text nodes change, and new elements are built with the DOM: the message's own markup, attributes included,
  * is never serialized and parsed again. Unknown codes stay as they are.
  */
@@ -28,8 +27,14 @@ export function renderMessageEmojis(root: HTMLElement, customEmojiUrl: (name: st
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
   for (const node of nodes) replaceInText(node, customEmojiUrl);
 
-  // A message of emojis only shows them large
-  if (root.innerText.trim() === "") {
+  // A message of emojis only shows them large: no text left outside the emojis (which are text in the Twemoji font)
+  const textWalker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let onlyEmojis = true;
+  while (onlyEmojis && textWalker.nextNode()) {
+    const node = textWalker.currentNode as Text;
+    if (node.data.trim() && !node.parentElement?.closest(".twemoji")) onlyEmojis = false;
+  }
+  if (onlyEmojis) {
     root.querySelectorAll(".emoji").forEach((emoji) => emoji.classList.add("emoji-large"));
   }
 }
@@ -41,11 +46,7 @@ function replaceInText(node: Text, customEmojiUrl: (name: string) => string | un
 
   for (const entity of parse(text)) {
     const [start, end] = entity.indices;
-    const svg = doc.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("class", "twemoji emoji");
-    const use = svg.appendChild(doc.createElementNS(SVG_NS, "use"));
-    use.setAttributeNS(XLINK_NS, "xlink:href", `#${toCodePoints(entity.text).join("-")}`);
-    pieces.push({ start, end, element: svg });
+    pieces.push({ start, end, element: twemoji(doc, entity.text, "emoji") });
   }
   CUSTOM_CODE.lastIndex = 0;
   for (let match = CUSTOM_CODE.exec(text); match; match = CUSTOM_CODE.exec(text)) {

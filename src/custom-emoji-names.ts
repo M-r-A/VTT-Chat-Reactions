@@ -1,7 +1,7 @@
 /**
  * The name a custom emoji gets from its file: "Party%20Parrot.gif" -> "Party_Parrot". Only the characters a chat
- * message can hold between colons are kept, which also keeps markup out of the picker: picmo puts names into its
- * HTML templates.
+ * message can hold between colons are kept, so no markup reaches the places names show (the picker builds its
+ * elements with the DOM, but names also travel in messages as :name: codes).
  */
 export function nameFromFile(file: string): string {
   let base = file.split("/").pop() ?? "";

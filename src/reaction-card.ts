@@ -1,5 +1,5 @@
 import utils from "./utils";
-import { toCodePoints } from "./common";
+import { twemoji } from "./twemoji";
 
 /** When each user reacted: emoji -> user id -> time in ms. */
 export type ReactedAt = Record<string, Record<string, number>>;
@@ -255,9 +255,7 @@ function emojiIcon(doc: Document, emoji: string): Element {
     img.src = emoji;
     return img;
   }
-  const holder = doc.createElement("span");
-  holder.innerHTML = `<svg class="emoji-image"><use xlink:href="#${toCodePoints(emoji).join("-")}"></use></svg>`;
-  return holder.firstElementChild as Element;
+  return twemoji(doc, emoji, "emoji-image");
 }
 
 // Above the pill, or below it when there is no room; inside the window

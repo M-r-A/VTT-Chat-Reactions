@@ -1,7 +1,13 @@
-import { CustomEmoji, EmojiRecord } from "picmo";
+import { twemoji } from "./twemoji";
 
-import { toCodePoints } from "./common";
-import { EMOJI_DATA } from "./local-emoji-data";
+/** A suggestion: a unicode emoji from the shipped data, or a custom emoji (which has a url and its name as `emoji`). */
+export interface SuggestedEmoji {
+  emoji: string;
+  label: string;
+  tags?: string[];
+  shortcodes?: string[];
+  url?: string;
+}
 
 // A colon followed by at least two word characters, right before the cursor
 const QUERY_PATTERN = /(?:^|\s)(:[\w-]{2,})$/;
@@ -12,12 +18,12 @@ function queryBefore(text: string): string | undefined {
 }
 
 /** What a chosen suggestion inserts: the emoji itself, or `:name:` for a custom emoji. */
-function identifierOf(e: EmojiRecord) {
+function identifierOf(e: SuggestedEmoji) {
   return e.url ? `:${e.emoji}:` : e.emoji;
 }
 
 /** Icon and label of a suggestion. */
-function labelOf(e: EmojiRecord): DocumentFragment {
+function labelOf(e: SuggestedEmoji): DocumentFragment {
   const label = document.createDocumentFragment();
   if (e.url) {
     // custom emoji
@@ -27,61 +33,67 @@ function labelOf(e: EmojiRecord): DocumentFragment {
     img.draggable = false;
     label.appendChild(img);
   } else {
-    const svg = document.createElement("span");
-    svg.innerHTML = `<svg class="emoji"><use xlink:href="#${toCodePoints(e.emoji).join("-")}"></use></svg>`;
-    label.appendChild(svg.firstElementChild as Element);
+    label.appendChild(twemoji(document, e.emoji, "emoji"));
   }
   label.append(e.label.replace(/ /g, "-"));
   return label;
 }
 
-/** An emoji with its label and tags in lower case, for matching a query without converting them each time. */
+/** An emoji with its label, tags and shortcodes in lower case, for matching a query without converting them each time. */
 interface SearchEntry {
-  emoji: EmojiRecord;
+  emoji: SuggestedEmoji;
   terms: string[];
 }
 
-function searchEntry(emoji: EmojiRecord): SearchEntry {
-  return { emoji, terms: [emoji.label, ...(emoji.tags ?? [])].map((term) => term.toLowerCase()) };
+function searchEntry(emoji: SuggestedEmoji): SearchEntry {
+  const terms = [emoji.label, ...(emoji.tags ?? []), ...(emoji.shortcodes ?? [])];
+  return { emoji, terms: terms.map((term) => term.toLowerCase()) };
 }
 
-// The shipped emoji data, in the order of picmo's database (by the emoji's code units), which the suggestions came in
-// when they were read from it
-let unicodeEntries: SearchEntry[] | undefined;
-function unicodeEmojis(): SearchEntry[] {
-  unicodeEntries ??= (EMOJI_DATA.emojiData as EmojiRecord[])
-    .slice()
-    .sort((a, b) => (a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0))
-    .map(searchEntry);
-  return unicodeEntries;
+// The shipped emoji data (data/emoji.json, the picker's too), fetched once and searched in memory: reading an
+// IndexedDB on each keystroke took seconds in WebKit. Sorted by the emoji's code units, the order suggestions came in.
+let unicodeEntries: SearchEntry[] = [];
+let loaded: Promise<void> = Promise.resolve();
+
+/** Load the shipped emoji data for the suggestions. */
+export function loadSuggestionData(url: string) {
+  loaded = fetch(url)
+    .then((response) => {
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return response.json();
+    })
+    .then((data: { emoji: string; annotation: string; tags?: string[]; shortcodes?: string[] }[]) => {
+      unicodeEntries = data
+        .map(({ emoji, annotation, tags, shortcodes }) => ({ emoji, label: annotation, tags, shortcodes }))
+        .sort((a, b) => (a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0))
+        .map(searchEntry);
+    })
+    .catch((error) => console.error("Chat Reactions | emoji data for suggestions", error));
 }
 
 /**
  * Searches emojis (custom ones first, then the shipped emoji data) for the `:query` typed in the chat input.
- * The search runs in memory: reading picmo's IndexedDB on each keystroke took seconds in some browsers, and found
- * nothing while the database was still being filled.
  */
 abstract class EmojiSearch {
-  private readonly _customEmojis: CustomEmoji[];
+  private readonly _customEmojis: SuggestedEmoji[];
   private readonly _maxResults;
   protected _word = "";
 
-  constructor(customEmojis: CustomEmoji[], maxResults) {
+  constructor(customEmojis: SuggestedEmoji[], maxResults) {
     this._customEmojis = customEmojis;
     this._maxResults = maxResults;
   }
 
-  /** Suggestions for a `:query`: emojis whose label or a tag contains it, `-` standing for a space. */
-  _filter(word: string): EmojiRecord[] {
+  /** Suggestions for a `:query`: emojis whose label, a tag or a shortcode contains it, `-` standing for a space. */
+  _filter(word: string): SuggestedEmoji[] {
     const query = word.substring(1).replace(/-/g, " ").toLowerCase();
-    const results: EmojiRecord[] = [];
+    const results: SuggestedEmoji[] = [];
     // Custom emojis can change at any time (uploads, settings), so they are matched as they are
     for (const emoji of this._customEmojis) {
       if (results.length >= this._maxResults) return results;
-      if (searchEntry(emoji as EmojiRecord).terms.some((term) => term.includes(query)))
-        results.push(emoji as EmojiRecord);
+      if (searchEntry(emoji).terms.some((term) => term.includes(query))) results.push(emoji);
     }
-    for (const { emoji, terms } of unicodeEmojis()) {
+    for (const { emoji, terms } of unicodeEntries) {
       if (results.length >= this._maxResults) break;
       if (terms.some((term) => term.includes(query))) results.push(emoji);
     }
@@ -89,7 +101,8 @@ abstract class EmojiSearch {
   }
 
   /** Suggestions for a query, or undefined when the input has moved on to another query meanwhile. */
-  async search(word: string): Promise<EmojiRecord[] | undefined> {
+  async search(word: string): Promise<SuggestedEmoji[] | undefined> {
+    await loaded;
     const list = this._filter(word);
     if (word !== this._word) return undefined;
     return list;
@@ -106,7 +119,7 @@ export class AutocompleteEmojiPleter extends EmojiSearch {
   private readonly _autocomplete;
   private _view;
 
-  constructor(customEmojis: CustomEmoji[], maxResults) {
+  constructor(customEmojis: SuggestedEmoji[], maxResults) {
     super(customEmojis, maxResults);
     const { Autocomplete } = (foundry as any).applications.ux;
     this._autocomplete = new Autocomplete.implementation({
@@ -185,7 +198,7 @@ export class TextareaEmojiPleter extends EmojiSearch {
   private _html: HTMLDivElement | undefined;
   private _selected: HTMLElement | undefined;
 
-  constructor(customEmojis: CustomEmoji[], maxResults) {
+  constructor(customEmojis: SuggestedEmoji[], maxResults) {
     super(customEmojis, maxResults);
     window.addEventListener("input", (ev) => this._onInput(ev), true);
     window.addEventListener("keydown", (ev) => this._onKeyDown(ev), true);
@@ -307,7 +320,7 @@ export class TextareaEmojiPleter extends EmojiSearch {
 export type EmojiPleter = AutocompleteEmojiPleter | TextareaEmojiPleter;
 
 /** The emojipleter for this core version: the core autocomplete menu exists from v14, along with the ProseMirror input. */
-export default function createEmojiPleter(customEmojis: CustomEmoji[], maxResults): EmojiPleter {
+export default function createEmojiPleter(customEmojis: SuggestedEmoji[], maxResults): EmojiPleter {
   return (foundry as any).applications?.ux?.Autocomplete
     ? new AutocompleteEmojiPleter(customEmojis, maxResults)
     : new TextareaEmojiPleter(customEmojis, maxResults);

@@ -1,4 +1,4 @@
-import { parse } from "twemoji-parser";
+import { parse } from "@twemoji/parser";
 
 /** Reactions of a message: emoji (or custom emoji image path) -> ids of the users who reacted. */
 export type Reactions = Record<string, string[]>;

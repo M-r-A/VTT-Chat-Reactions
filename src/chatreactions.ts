@@ -1,8 +1,8 @@
-import { createPopup, PopupPickerController } from "@picmo/popup-picker";
 import utils from "./utils";
 
-import { toCodePoints } from "./common";
-import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter } from "./emojipleter";
+import createEmojiPleter, { AutocompleteEmojiPleter, EmojiPleter, loadSuggestionData } from "./emojipleter";
+import { configurePicker, PickerChoice, togglePicker } from "./picker";
+import { twemoji } from "./twemoji";
 import {
   attachReactionCard,
   formatCount,
@@ -14,7 +14,6 @@ import {
 import { renderMessageEmojis } from "./message-emojis";
 import { isLocalImagePath, isUnicodeEmoji, MAX_REACTION_LENGTH, readReactions } from "./reactions";
 import { freeName, nameFromFile } from "./custom-emoji-names";
-import { EMOJI_DATA, LocalTwemojiRenderer, prepareEmojiDatabase } from "./local-emoji-data";
 declare global {
   interface LenientGlobalVariableTypes {
     game: never;
@@ -23,17 +22,15 @@ declare global {
 
 let socket;
 
-let picker: PopupPickerController | undefined;
-let popoutPicker: PopupPickerController | undefined; // Picker especially for the PopOut! module windows
-// picmo's emoji database, filled once from the data shipped with the module. Pickers are created after it: a picker
-// fills an empty database itself, and two fills at once in a fresh browser profile break it ("Failed to load emojis").
-let emojiDatabase: Promise<void> = Promise.resolve();
-let currentMessage;
 let chatInputView; // ProseMirror EditorView of the chat input
 let emojiPleter: EmojiPleter | undefined;
-const emojiDirectories: any = [];
-const customEmojis: any = [];
+const emojiDirectories: { directory: string; category: string }[] = [];
+// Custom emojis: name (also in `label` and `emoji`), image url, and where they come from (the folder, a pack)
+const customEmojis: { label: string; emoji: string; url: string; category: string }[] = [];
 let fileBrowserDenied = false; // a custom emoji folder could not be read: the user may not browse files
+// The emoji data the module ships: the picker's database and the suggestions read it (no CDN)
+const EMOJI_DATA_PATH = "modules/chatreactions/data/emoji.json";
+// The picker's categories, by the names of their visibility settings (show-category-…)
 let categories = [
   "recents",
   "custom",
@@ -135,11 +132,11 @@ Hooks.once("init", async () => {
     const packDirectory = module.flags?.emojiPack ?? module.flags?.emojiPacker;
     if (!module.active || !packDirectory) return;
     console.log(`\nChat Reactions found ${module.title}\n`);
-    emojiDirectories.push(`modules/${module.id}${packDirectory}`);
+    emojiDirectories.push({ directory: `modules/${module.id}${packDirectory}`, category: module.title });
   });
 
-  for (const directory of emojiDirectories) {
-    await loadDirectory(directory);
+  for (const { directory, category } of emojiDirectories) {
+    await loadDirectory(directory, category);
   }
 
   // Store the custom emoji directory for loading up all them delciious emojis
@@ -261,11 +258,12 @@ Hooks.once("init", async () => {
   }
   categories = categories.filter((category) => game.settings.get("chatreactions", `show-category-${category}`));
 
-  // The pickers read picmo's emoji database, filled from the data shipped with the module; the suggestions search the
-  // data itself
-  emojiDatabase = prepareEmojiDatabase().catch((error) => console.error("Chat Reactions: emoji data", error));
-  if (game.settings.get("chatreactions", "emojipleter"))
+  // The suggestions search the shipped emoji data in memory; the picker's database fills from the same file
+  const dataUrl = (foundry.utils as any).getRoute(EMOJI_DATA_PATH);
+  if (game.settings.get("chatreactions", "emojipleter")) {
+    loadSuggestionData(dataUrl);
     emojiPleter = createEmojiPleter(customEmojis, game.settings.get("chatreactions", "emojipleter-max-results"));
+  }
 
   //   --category-button-color
 
@@ -285,31 +283,44 @@ Hooks.once("init", async () => {
   // });
 
   const directory = game.settings.get("chatreactions", "chat-reactions-directory") as string;
-  if (directory !== "") await loadDirectory(directory);
+  if (directory !== "") await loadDirectory(directory, game.i18n.localize("chatreactions.picker.emojiFolder"));
 
-  emojiDatabase.then(() => {
-    picker = createPicker();
-  });
-
-  const pickerCssRules = {
-    "--background-color": `#${pickerColor("picker-background")}`,
-    "--secondary-background-color": `#${pickerColor("picker-background")}`,
-    "--category-name-background-color": `#${pickerColor("picker-background")}`,
-    "--category-name-text-color": `#${pickerColor("picker-font-color")}75`,
-    "--text-color": `#${pickerColor("picker-font-color")}`,
-    "--secondary-text-color": `#${pickerColor("picker-font-color")}75`,
-    "--category-tab-color": `#${pickerColor("category-active-icon-color")}75`,
-    "--category-tab-active-color": `#${pickerColor("category-active-icon-color")}`,
-    "--hover-background-color": "#e7f3f8",
+  // Emojibase groups of the picker, by the category settings (smileys 0, people 1, animals 3 … flags 9)
+  const GROUPS = {
+    "smileys-emotion": 0,
+    "people-body": 1,
+    "animals-nature": 3,
+    "food-drink": 4,
+    "travel-places": 5,
+    activities: 6,
+    objects: 7,
+    symbols: 8,
+    flags: 9,
   };
-  // Two classes outweigh picmo's theme (.picmo__light), whichever style the page got first: picmo adds its own when the
-  // first picker is created, after the emoji data is ready
-  $("head").append(
-    `<style class="emoji-picker__styles">.picmo__picker.picmo__picker {${Object.entries(pickerCssRules)
-      .map(([key, value]) => `${key}: ${value};`)
-      .join("\n")}}</style>`,
-  );
+  configurePicker({
+    dataUrl,
+    customEmojis: customEmojis.map(({ emoji, url, category }) => ({ name: emoji, url, category })),
+    groups: new Set(categories.filter((c) => c in GROUPS).map((c) => GROUPS[c])),
+    showCustom: categories.includes("custom"),
+    // Frequently used: as many as the setting allows, two rows at most
+    frequentCount: categories.includes("recents")
+      ? Math.max(0, Math.min(16, game.settings.get("chatreactions", "max-recents") as number))
+      : 0,
+    showPreview: game.settings.get("chatreactions", "show-preview") as boolean,
+    // The picker follows Foundry's theme; a color changed from its default in the settings wins
+    colors: {
+      background: customPickerColor("picker-background"),
+      text: customPickerColor("picker-font-color"),
+      accent: customPickerColor("category-active-icon-color"),
+    },
+  });
 });
+
+// A picker color the GM changed from its default, or undefined to follow Foundry's theme
+function customPickerColor(key: PickerColor): string | undefined {
+  const color = `#${pickerColor(key)}`;
+  return color === PICKER_COLORS[key] ? undefined : color;
+}
 
 Hooks.once("ready", () => {
   migratePickerColors();
@@ -330,42 +341,15 @@ Hooks.once("ready", () => {
   }
 });
 
-function onEmojiInput(selection) {
-  // `selection` object has an `emoji` property
-  // containing the selected emoji
-  if (currentMessage === null) {
-    insertIntoChatInput(selection.hexcode ? selection.emoji : `:${selection.emoji}:`);
-  } else {
-    //@ts-ignore
-    if (!selection.hexcode) {
-      socketExecute(selection.url, currentMessage);
-    } else {
-      socketExecute(selection.emoji, currentMessage);
-    }
-  }
-}
-
-function createPicker(rootElement: HTMLElement = document.body) {
-  const newPicker = createPopup(
-    {
-      rootElement: rootElement,
-      renderer: new LocalTwemojiRenderer(),
-      ...EMOJI_DATA,
-      emojiVersion: 14,
-      custom: customEmojis,
-      categories: categories as any,
-      initialCategory: "recents",
-      maxRecents: game.settings.get("chatreactions", "max-recents") as number,
-      showPreview: game.settings.get("chatreactions", "show-preview") as boolean,
-    },
-    {
-      showCloseButton: true,
-      onPositionLost: "close",
-      position: rootElement == document.body ? "auto" : "left",
-    },
-  );
-  newPicker.addEventListener("emoji:select", onEmojiInput);
-  return newPicker;
+/**
+ * Open the picker from a button: a chosen emoji reacts to the message, or, without a message, goes into the chat input
+ * (a custom emoji as its :name: code).
+ */
+function openPicker(button: HTMLElement, message: any = null) {
+  togglePicker(button, (choice: PickerChoice) => {
+    if (message) socketExecute("url" in choice ? choice.url : choice.unicode, message);
+    else insertIntoChatInput("url" in choice ? `:${choice.name}:` : choice.unicode);
+  });
 }
 
 // Insert text at the cursor of the chat input: a ProseMirror editor in v14, a textarea before
@@ -474,7 +458,7 @@ async function applyReaction(emoji: string, sentMessageID: string, user: string 
   } as any);
 }
 
-async function loadDirectory(directory: string) {
+async function loadDirectory(directory: string, category: string) {
   const dir = utils.parseDirectory(directory);
   // v13+ FilePicker is an ApplicationV2 in foundry.applications.apps; v12 has the global one
   const Picker = (foundry as any).applications?.apps?.FilePicker?.implementation ?? FilePicker;
@@ -483,7 +467,7 @@ async function loadDirectory(directory: string) {
   })
     .then((fileList) => {
       // Load all the custom emojis from emoji packs
-      addToCustomEmojiList(fileList, customEmojis);
+      addToCustomEmojiList(fileList, category);
     })
     .catch(() => {
       fileBrowserDenied = true; // reported once, in the console, when ready
@@ -491,13 +475,14 @@ async function loadDirectory(directory: string) {
 }
 
 // Get all emoji image files from the directory and add them to the picker. Names come from the file names, with only
-// the characters a message can hold between colons; a second file of the same name gets _2.
-function addToCustomEmojiList(fileList, customEmojis) {
+// the characters a message can hold between colons; a second file of the same name gets _2. The picker shows them
+// under their source: the emoji folder or the pack.
+function addToCustomEmojiList(fileList, category: string) {
   const taken = new Set<string>(customEmojis.map((emoji) => emoji.emoji.toLowerCase()));
   for (const url of fileList.files as string[]) {
     const name = freeName(nameFromFile(url), taken);
     taken.add(name.toLowerCase());
-    customEmojis.push({ label: name, emoji: name, url });
+    customEmojis.push({ label: name, emoji: name, url, category });
   }
 }
 
@@ -505,37 +490,6 @@ function addToCustomEmojiList(fileList, customEmojis) {
 function reactionImage(key: string): string | undefined {
   return customEmojis.find((emoji) => emoji.url === key)?.url ?? (isLocalImagePath(key) ? key : undefined);
 }
-
-function togglePicker(referenceEl: HTMLElement) {
-  if (!picker) {
-    // the emoji database is still being filled
-    emojiDatabase.then(() => togglePicker(referenceEl));
-    return;
-  }
-  if (!document.contains(referenceEl) && popoutPicker)
-    popoutPicker.toggle({
-      triggerElement: referenceEl,
-      referenceElement: referenceEl,
-    });
-  else
-    picker.toggle({
-      triggerElement: referenceEl,
-      referenceElement: referenceEl,
-    });
-}
-
-Hooks.on("PopOut:loaded", (_app, node: HTMLElement) => {
-  if (node.querySelector("#chat-message")) {
-    // Chat window has been popped out into a new window
-    emojiDatabase.then(() => {
-      popoutPicker = createPicker(node);
-    });
-    // Clone sprite sheet to new window so emojis won't be invisible
-    if (node.querySelector("#picmo-twemoji-sprites")) return; // Already cloned
-    const spriteSheet = document.getElementById("picmo-twemoji-sprites") as HTMLElement;
-    node.appendChild(spriteSheet.cloneNode(true));
-  }
-});
 
 // ProseMirror plugin for the chat input: keeps its view for inserting emojis and feeds the emojipleter
 function buildChatInputPlugin() {
@@ -595,6 +549,8 @@ Hooks.on("renderChatLog", (_app, html) => {
     buttons.className = "control-buttons";
     controls.append(buttons);
   }
+  // Core top-aligns the 24px roll mode select in the 28px row: the buttons line up with it (styles/module.css)
+  buttons.classList.add("chat-reactions-controls");
   addEmojiButton(buttons);
 });
 
@@ -607,14 +563,11 @@ function addEmojiButton(container: HTMLElement) {
   if (game.settings.get("chatreactions", "compact-emoji-button")) {
     button.classList.add("fa-solid", "fa-face-smile");
   } else {
-    button.innerHTML = `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
+    button.append(twemoji(document, "➕"));
   }
-  button.dataset.tooltip = "Add emoji"; // data-tooltip works from v12 on (data-tooltip-text only from v13)
-  button.setAttribute("aria-label", "Add emoji");
-  button.addEventListener("click", function () {
-    togglePicker(button);
-    currentMessage = null;
-  });
+  button.dataset.tooltip = utils.localize("picker.addEmoji"); // data-tooltip works from v12 on (data-tooltip-text only from v13)
+  button.setAttribute("aria-label", utils.localize("picker.addEmoji"));
+  button.addEventListener("click", () => openPicker(button));
   container.append(button);
 }
 
@@ -665,11 +618,7 @@ function renderMessage(message, element: HTMLElement) {
       EmojiImage.src = image;
       ButtonContent.appendChild(EmojiImage);
     } else {
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("class", "emoji-image");
-      const use = svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use"));
-      use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${toCodePoints(key).join("-")}`);
-      ButtonContent.appendChild(svg);
+      ButtonContent.appendChild(twemoji(document, key, "emoji-image"));
     }
     ButtonContent.className = "emoji-button-content";
     ButtonContent.appendChild(EmojiReactions);
@@ -695,25 +644,24 @@ function renderMessage(message, element: HTMLElement) {
     const compactButton = document.createElement("a");
     compactButton.className = "compact-reaction-button";
     compactButton.innerHTML = "<i class='fas fa-smile'></i>";
+    compactButton.setAttribute("aria-label", utils.localize("addReaction"));
     element.querySelector(".message-metadata")?.appendChild(compactButton);
 
-    compactButton.addEventListener("click", function () {
-      togglePicker(compactButton);
-      currentMessage = message;
-    });
+    compactButton.addEventListener("click", () => openPicker(compactButton, message));
     if (shown === 0) return;
   }
 
   // Create Picker Button and add it to the Emoji Rack
   if (shown < 4) {
+    // A Font Awesome plus in the message's text color: visible on light and dark cards alike
     const p = document.createElement("button");
-    p.innerHTML += `<svg class="emoji-image"><use xlink:href="#2795"></use></svg>`;
+    p.type = "button";
+    const plus = document.createElement("i");
+    plus.className = "fa-solid fa-plus";
+    p.append(plus);
+    p.setAttribute("aria-label", utils.localize("addReaction"));
     p.className += "emoji-button trigger";
-
-    p.addEventListener("click", function () {
-      togglePicker(p);
-      currentMessage = message;
-    });
+    p.addEventListener("click", () => openPicker(p, message));
     emojiRack.appendChild(p);
   }
   element.appendChild(emojiRack);

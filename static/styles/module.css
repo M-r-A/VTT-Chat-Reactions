@@ -1,10 +1,21 @@
-/* Better position the emoji picker in PopOut! chat log */
-#chat-popout .picmo__picker {
-  right: 10px;
+/* --- Twemoji ---------------------------------------------------------------------------------------------------
+   Every emoji the module draws (picker, messages, reaction pills, suggestions, reaction card) is text in the Twemoji
+   font it ships (@sableclient/twemoji-font, COLRv0, which Chromium, Firefox and WebKit draw). An emoji the font has
+   no glyph for falls back to the system font. The chat input keeps the font core or the game system gives it, on
+   purpose: a font list set here would replace a system's own (module styles outrank system styles), so emoji typed
+   there are drawn by the operating system's emoji font. */
+@font-face {
+  font-family: "Chat Reactions Twemoji";
+  src: url("../fonts/twemoji.woff2") format("woff2");
+  font-display: swap;
 }
-
-#chat-popout .picmo__closeButton {
-  left: 0;
+.twemoji {
+  font-family: "Chat Reactions Twemoji", sans-serif;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  /* Core v13+ sets text-rendering: optimizeSpeed; WebKit then draws an empty box after emoji outside the basic plane */
+  text-rendering: auto;
 }
 
 /* Emoji completions in the core autocomplete menu (v14) */
@@ -12,6 +23,11 @@
   margin-right: 0.5em;
   width: 1.5em;
   height: 1.5em;
+  vertical-align: middle;
+}
+#autocomplete li .twemoji {
+  margin-right: 0.5em;
+  font-size: 1.5em;
   vertical-align: middle;
 }
 
@@ -51,8 +67,25 @@
   width: 1.5em;
   height: 1.5em;
 }
+#emojipleter .twemoji {
+  margin-right: 0.5em;
+  font-size: 1.5em;
+}
 
 /* v12 has no .ui-control style: make the emoji button look like the other chat control icons */
+/* v12: core top-aligns the roll mode select (24px) in the 28px row; the buttons sit at its height and center */
+#chat-controls .control-buttons.chat-reactions-controls {
+  align-self: flex-start;
+  align-items: center;
+  height: 24px;
+}
+
+/* v12: pressed while its picker is open, with the light text and red glow of v12's active controls */
+#chat-controls .chat-reactions-controls .chat-reactions-picker[aria-pressed="true"] {
+  color: var(--color-text-light-highlight, #f0f0e0);
+  text-shadow: 0 0 10px var(--color-shadow-primary, #f00);
+}
+
 #chat-controls .control-buttons .chat-reactions-picker {
   flex: 0 0 auto;
   width: auto;
@@ -77,7 +110,6 @@
   font-size: 0.85rem;
   margin-right: 5px;
 }
-
 #chatOptions {
   display: flex;
   flex-direction: column;
@@ -86,8 +118,8 @@
   position: absolute;
 }
 
-#chat-controls .chat-reactions-picker .emoji-image {
-  height: 1.25em;
+#chat-controls .chat-reactions-picker .twemoji {
+  font-size: 1.25em;
 }
 
 #chat-controls {
@@ -113,52 +145,25 @@
   max-height: 0; /* Make player view consistent with GM view */
 }
 
-img.emoji,
-svg.emoji {
+img.emoji {
   height: 1.2em;
   width: 1.2em;
   border: none;
   vertical-align: -0.1em;
 }
-img.emoji.emoji-large,
-svg.emoji.emoji-large {
+img.emoji.emoji-large {
   height: 2.4em;
   width: 2.4em;
+}
+.twemoji.emoji {
+  font-size: 1.2em;
+}
+.twemoji.emoji.emoji-large {
+  font-size: 2.4em;
 }
 
 .invert {
   filter: invert(100%);
-}
-
-.picmo__popupContainer {
-  z-index: 1000; /* So it appears above popped-out chat logs */
-}
-
-.picmo__picker {
-  /* Make more compact */
-  gap: 2px;
-}
-
-.picmo__picker .picmo__header {
-  padding-bottom: 0;
-  gap: 2px;
-}
-
-.picmo__picker .emojiCategory .categoryName {
-  font-family: "Signika", sans-serif;
-}
-
-/* Emoji buttons look the same on every core: v13+ gives buttons a 64px min-height, which stretched the hover
-   highlight, a 0.5s transition, which made the glow trail the cursor, and drops the red hover glow v12 gives every
-   button */
-.picmo__picker .picmo__emojiButton {
-  min-height: 0;
-  line-height: 28px;
-  transition: none;
-}
-
-.picmo__picker .picmo__emojiButton:hover {
-  box-shadow: 0 0 5px rgb(255, 0, 0);
 }
 
 .reaction {
@@ -194,6 +199,11 @@ svg.emoji.emoji-large {
   margin-top: auto;
   margin-bottom: auto;
 }
+.twemoji.emoji-image {
+  height: auto;
+  aspect-ratio: auto;
+  font-size: 1rem;
+}
 
 .emoji-button:hover {
   cursor: pointer;
@@ -209,11 +219,22 @@ svg.emoji.emoji-large {
 }
 
 .trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   background-color: transparent;
   border: none;
   width: 30px;
   border-radius: 100%;
   height: 30px;
+  line-height: 1;
+  color: inherit;
+  font-size: 1rem;
+}
+/* v12 gives every button icon a right margin, which pushed the plus off center */
+.trigger > i {
+  margin: 0;
 }
 
 /* Who reacted, and when: a card above the reaction pill (see reaction-card.ts). It takes the look of the core tooltip
@@ -312,10 +333,396 @@ svg.emoji.emoji-large {
   height: 0.9rem;
   margin: 0;
 }
+.chat-reactions-card-time .twemoji.emoji-image {
+  height: auto;
+  font-size: 0.9rem;
+}
 
 .chat-reactions-card-hint {
   padding: 0.55rem 0.9rem;
   border-top: 6px solid color-mix(in srgb, currentColor 12%, transparent);
   font-size: 0.85rem;
   color: color-mix(in srgb, currentColor 85%, transparent);
+}
+
+/* --- Emoji picker (picker.ts) ------------------------------------------------------------------------------------
+   It looks like core's context menu and autocomplete. v13/v14: the root carries "themed theme-dark|light" copied
+   from where it opens, so core's theme variables apply inside it. v12 has no themed interface: the V1 context menu's
+   fixed dark look, which core itself hard-codes. Picker colors changed from their defaults in the settings win. */
+.crp-popover {
+  position: fixed;
+  z-index: calc(var(--z-index-tooltip, 10000) - 1);
+}
+.crp-popover[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+}
+.crp {
+  --crp-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
+  --crp-radius: 5px;
+  --crp-accent: var(--color-shadow-primary, #f00);
+  display: flex;
+  flex-direction: column;
+  width: 382px;
+  height: 440px;
+  /* A small window (a detached chat opens at about 300 x 256) gets a smaller picker; the grid scrolls inside */
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  box-sizing: border-box;
+  background: var(--crp-bg);
+  color: var(--crp-text);
+  border: 1px solid var(--crp-border);
+  border-radius: var(--crp-radius);
+  box-shadow: var(--crp-shadow);
+  overflow: hidden;
+  font-family: var(--font-body, var(--font-primary));
+  font-size: 14px;
+  line-height: normal;
+  text-align: left;
+  text-rendering: auto;
+}
+/* Entries hover as #context-menu li.context-item:hover; headings as the sidebar's sticky folder headers */
+.crp.theme-dark {
+  --crp-bg: var(--color-cool-5);
+  --crp-border: var(--color-cool-3);
+  --crp-separator: var(--color-cool-4);
+  --crp-text: var(--color-text-primary);
+  --crp-muted: var(--color-text-subtle);
+  --crp-hover-bg: var(--color-dark-1);
+  --crp-hover-border: var(--color-cool-4);
+  --crp-heading-bg: var(--sidebar-folder-color, var(--color-dark-1));
+  --crp-heading-text: var(--color-light-2);
+  --crp-heading-shadow: 0 0 3px var(--color-dark-1);
+}
+/* Light: white, as core's v14 Autocomplete in the light theme, so yellow emoji keep their contrast. Core folder
+   headers put light text on the khaki bar, which is hard to read at this size: dark text instead. */
+.crp.theme-light {
+  --crp-bg: #fff;
+  --crp-border: #999;
+  --crp-separator: #999;
+  --crp-text: var(--color-text-primary);
+  --crp-muted: var(--color-text-subtle);
+  --crp-hover-bg: #f0f0e0;
+  --crp-hover-border: #999;
+  --crp-heading-bg: var(--sidebar-folder-color, #a19e78);
+  --crp-heading-text: var(--color-text-emphatic);
+  --crp-heading-shadow: none;
+}
+.crp.crp-v12 {
+  --crp-bg: #23221d;
+  --crp-border: var(--color-border-dark, #000);
+  --crp-separator: #444;
+  --crp-text: var(--color-text-light-1, #eee);
+  --crp-muted: var(--color-text-light-primary, #b5b3a4);
+  --crp-hover-bg: rgba(255, 255, 255, 0.1);
+  --crp-hover-border: transparent;
+  /* The v12 folder header, rgba(255,255,255,.2) over the picker, made opaque so it can stay pinned */
+  --crp-heading-bg: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), #23221d;
+  --crp-heading-text: var(--color-text-light-highlight, #f0f0e0);
+  --crp-heading-shadow: 0 0 3px var(--color-shadow-dark, #000);
+}
+.crp[data-custom-background] {
+  --crp-bg: var(--crp-custom-background);
+  --crp-heading-bg: color-mix(in srgb, var(--crp-custom-background) 80%, var(--crp-text));
+}
+.crp[data-custom-text] {
+  --crp-text: var(--crp-custom-text);
+  --crp-muted: var(--crp-custom-text);
+  --crp-heading-text: var(--crp-custom-text);
+}
+.crp[data-custom-accent] {
+  --crp-accent: var(--crp-custom-accent);
+}
+
+/* Core's global button rules stay off the tabs, emoji cells and tones */
+.crp .crp-tab,
+.crp .crp-emoji,
+.crp .crp-tone {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Tabs as core's icon controls (button.ui-control), each on its own: the icon in the theme's text, a box on hover,
+   the accent border of a pressed control when selected (v13/v14 --control-*). v12: as the sidebar's tabs
+   (#sidebar-tabs): the row glows red over an orange line; the selected tab has a red border open at the bottom, an
+   orange inner glow, and the red glow of a hovered tab. The icons keep their outline in every state. */
+.crp .crp-tabs {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--crp-separator);
+}
+.crp .crp-tab {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--crp-tab-icon);
+  font-size: 16px;
+  transition:
+    border 0.25s,
+    color 0.25s;
+}
+.crp .crp-tab:hover {
+  background: var(--crp-tab-hover-bg);
+  border-color: var(--crp-tab-hover-border);
+  color: var(--crp-tab-active-icon);
+}
+.crp .crp-tab[aria-selected="true"] {
+  background: var(--crp-tab-active-bg);
+  border-color: var(--crp-accent);
+  color: var(--crp-tab-active-icon);
+}
+.crp .crp-tab:focus-visible {
+  outline: 1px solid var(--crp-accent);
+  outline-offset: 1px;
+}
+.crp.theme-dark {
+  --crp-tab-icon: var(--color-light-2);
+  --crp-tab-hover-bg: var(--color-cool-5);
+  --crp-tab-hover-border: var(--color-cool-3);
+  --crp-tab-active-bg: var(--color-cool-5);
+  --crp-tab-active-icon: var(--color-light-1);
+}
+.crp.theme-light {
+  --crp-tab-icon: var(--color-dark-2);
+  --crp-tab-hover-bg: #f0f0e0;
+  --crp-tab-hover-border: #999;
+  --crp-tab-active-bg: #f0f0e0;
+  --crp-tab-active-icon: var(--color-dark-1);
+}
+.crp.crp-v12 .crp-tabs {
+  padding: 4px 4px 0;
+  border-bottom: 1px solid var(--color-border-highlight, #ff6400);
+  box-shadow: 0 0 10px var(--color-shadow-primary, #f00);
+}
+.crp.crp-v12 .crp-tab {
+  flex: 0 0 34px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  color: var(--color-text-light-primary, #b5b3a4);
+  background: none;
+}
+/* v12 gives every button icon a right margin, which moved the icons off the middle of their tab */
+.crp.crp-v12 .crp-tab > i {
+  margin: 0;
+}
+.crp.crp-v12 .crp-tab:hover {
+  color: var(--color-text-light-highlight, #f0f0e0);
+  background: none;
+  border-color: transparent;
+  text-shadow: 0 0 10px var(--color-shadow-primary, #f00);
+}
+.crp.crp-v12 .crp-tab[aria-selected="true"] {
+  color: var(--color-text-light-highlight, #f0f0e0);
+  border: 1px solid var(--color-border-highlight-alt, #f00);
+  border-bottom: none;
+  box-shadow: 0 0 6px inset var(--color-shadow-highlight, #ff6400);
+  text-shadow: 0 0 10px var(--color-shadow-primary, #f00);
+}
+
+/* The search field is core's input: v13/v14 style every input[type=search] (--input-*); v12 as the sidebar search */
+.crp .crp-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.crp .crp-search {
+  padding: 10px 10px 4px;
+}
+.crp .crp-search input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+.crp .crp-search input::placeholder {
+  font-style: italic;
+}
+.crp.crp-v12 .crp-search input {
+  height: var(--form-field-height, 26px);
+  background: rgba(255, 255, 245, 0.8);
+}
+
+/* Content: headings pinned as the sidebar's folder headers; scrollbars are core's (v13/v14 thin crimson, v12 also
+   ::-webkit-scrollbar), the picker adds none */
+.crp .crp-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+.crp .crp-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0 12px;
+  line-height: 26px;
+  background: var(--crp-heading-bg);
+  color: var(--crp-heading-text);
+  text-shadow: var(--crp-heading-shadow);
+  font-size: 14px;
+}
+/* content-visibility clips what a section draws outside its box: the grid keeps the hover and focus glow of its
+   cells (5px) inside, under the heading and at the sides */
+.crp .crp-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
+.crp .crp-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  padding: 6px;
+}
+.crp .crp-emoji {
+  height: 40px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: 0.1s;
+  /* WebKit gives buttons a translucent text color, which it would also apply to the color glyphs */
+  color: #000;
+}
+.crp .crp-emoji .twemoji {
+  font-size: 26px;
+}
+.crp .crp-emoji img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+/* Hover as a context menu entry; keyboard focus with the focus ring of core's buttons */
+.crp .crp-emoji:hover {
+  background: var(--crp-hover-bg);
+  border-color: var(--crp-hover-border);
+}
+.crp .crp-emoji:focus-visible {
+  background: var(--crp-hover-bg);
+  outline: 1px solid var(--button-focus-outline-color, var(--crp-accent));
+  box-shadow: 0 0 4px var(--button-focus-outline-color, var(--crp-accent));
+}
+/* v12: the glow of its V1 buttons, on hover and focus */
+.crp.crp-v12 .crp-emoji:hover,
+.crp.crp-v12 .crp-emoji:focus-visible {
+  outline: none;
+  box-shadow: 0 0 5px var(--crp-accent);
+}
+.crp .crp-empty {
+  padding: 16px;
+  color: var(--crp-muted);
+  text-align: center;
+}
+
+/* Footer: core's buttons at their natural width; the six skin tones while choosing; the preview while an emoji is
+   hovered or focused */
+.crp .crp-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 52px;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-top: 1px solid var(--crp-separator);
+}
+.crp .crp-actions {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.crp .crp-footer button:not(.crp-tone) {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding-inline: 10px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.crp.crp-v12 .crp-footer button:not(.crp-tone) {
+  line-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+.crp .crp-skin-hand {
+  font-size: 18px;
+  color: #000;
+}
+.crp .crp-tones {
+  display: none;
+  flex: 1;
+  justify-content: space-between;
+}
+.crp .crp-tone {
+  width: 36px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  color: #000;
+}
+.crp .crp-tone .twemoji {
+  font-size: 22px;
+}
+.crp .crp-tone:hover,
+.crp .crp-tone[aria-selected="true"] {
+  background: var(--crp-hover-bg);
+  border-color: var(--crp-hover-border);
+}
+.crp .crp-tone:focus-visible {
+  outline: 1px solid var(--crp-accent);
+}
+.crp .crp-preview {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.crp .crp-footer.choosing-tone .crp-actions,
+.crp .crp-footer.previewing .crp-actions {
+  display: none;
+}
+.crp .crp-footer.choosing-tone .crp-tones {
+  display: flex;
+}
+.crp .crp-footer.previewing .crp-preview {
+  display: flex;
+}
+.crp .crp-preview-emoji {
+  color: #000;
+}
+.crp .crp-preview-emoji .twemoji {
+  font-size: 32px;
+}
+.crp .crp-preview-emoji img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
+.crp .crp-preview-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.crp .crp-preview-name {
+  font-weight: 600;
+  color: var(--color-text-emphatic, var(--color-text-light-highlight, #f0f0e0));
+}
+.crp .crp-preview-codes {
+  font-size: 12px;
+  color: var(--crp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
