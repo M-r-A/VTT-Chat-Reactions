@@ -1,4 +1,5 @@
-import { parse } from "twemoji-parser";
+import { parse } from "@twemoji/parser";
+import { isRgiEmoji } from "./emoji-match";
 
 /** Reactions of a message: emoji (or custom emoji image path) -> ids of the users who reacted. */
 export type Reactions = Record<string, string[]>;
@@ -27,11 +28,11 @@ export function readReactions(message): Reactions {
   return reactions;
 }
 
-/** Whether a key is exactly one unicode emoji, as the picker sends them. */
+/** Whether a key is exactly one unicode emoji, as the picker sends them: one for Twemoji's parser or the browser. */
 export function isUnicodeEmoji(key: unknown): key is string {
   if (typeof key !== "string" || !key || key.length > 64) return false;
   const entities = parse(key);
-  return entities.length === 1 && entities[0].text === key;
+  return (entities.length === 1 && entities[0].text === key) || isRgiEmoji(key);
 }
 
 /**

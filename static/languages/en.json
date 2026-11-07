@@ -3,6 +3,7 @@
   "I18N.MAINTAINERS": "YourFavouriteOreo#6798",
   "chatreactions": {
     "title": "Chat Reactions",
+    "addReaction": "Add Reaction",
     "warnings": {
       "noDirectory": "Chat Reactions | Custom emojis are off because no emoji folder is set. A GM can choose a folder with emoji images in Configure Settings → Chat Reactions → Custom Emojis Directory.",
       "noFileBrowser": "Chat Reactions | Custom emojis and emoji packs are hidden for you: they need the \"{permission}\" permission. Ask the GM to grant it to your role in Configure Permissions."
@@ -10,7 +11,7 @@
     "card": {
       "dayAtTime": "{day} at {time}",
       "removeHint": "Click to remove your reaction.",
-      "unknownUser": "Unknown user"
+      "unknownUser": "Unknown User"
     },
     "settings": {
       "emojipleter": {
@@ -32,6 +33,75 @@
       "compactEmojiButton": {
         "name": "Compact Emoji Button",
         "hint": "Shows the add emoji button next to the chat input as a small smiley icon."
+      },
+      "pickerBackground": {
+        "name": "Picker Background Color",
+        "hint": "The background of the emoji picker. Left at its default, the picker follows Foundry's theme."
+      },
+      "pickerText": {
+        "name": "Picker Text Color",
+        "hint": "The text of the emoji picker. Left at its default, the picker follows Foundry's theme."
+      },
+      "pickerAccent": {
+        "name": "Picker Accent Color",
+        "hint": "The selected category and the focus outline in the emoji picker. Left at its default, the picker follows Foundry's theme."
+      },
+      "frequentCount": {
+        "name": "Frequently Used Emojis",
+        "hint": "How many of your most used emojis the picker shows first, up to 16 (two rows). 0 hides them."
+      },
+      "showPreview": {
+        "name": "Show Preview",
+        "hint": "Shows the emoji under the pointer, with its name, at the bottom of the picker."
+      },
+      "showCategory": {
+        "name": "Show Category: {category}",
+        "hint": "Shows the {category} emojis in the picker."
+      },
+      "categories": {
+        "recents": "Frequently Used",
+        "custom": "Custom Emojis",
+        "smileys-emotion": "Smileys & Emotion",
+        "people-body": "People & Body",
+        "animals-nature": "Animals & Nature",
+        "food-drink": "Food & Drink",
+        "activities": "Activities",
+        "travel-places": "Travel & Places",
+        "objects": "Objects",
+        "symbols": "Symbols",
+        "flags": "Flags"
+      }
+    },
+    "picker": {
+      "label": "Emoji Picker",
+      "searchPlaceholder": "Search All Emoji",
+      "frequent": "Frequently Used",
+      "searchResults": "Search Results",
+      "noResults": "No emoji found",
+      "loading": "Loading emoji…",
+      "dataError": "The emoji data could not be loaded.",
+      "addEmoji": "Add Emoji",
+      "skinTone": "Skin Tone",
+      "emojiFolder": "Emoji Folder",
+      "tabs": {
+        "search": "Search",
+        "people": "Smileys & People",
+        "nature": "Animals & Nature",
+        "food": "Food & Drink",
+        "travel": "Travel & Places",
+        "activities": "Activities",
+        "objects": "Objects",
+        "symbols": "Symbols",
+        "flags": "Flags",
+        "custom": "Custom Emojis"
+      },
+      "tones": {
+        "0": "Default",
+        "1": "Light",
+        "2": "Medium-Light",
+        "3": "Medium",
+        "4": "Medium-Dark",
+        "5": "Dark"
       }
     }
   }
